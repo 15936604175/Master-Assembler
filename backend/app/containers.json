@@ -1,0 +1,7 @@
+{
+  "presets": [
+    { "id": "20GP", "name": "20尺普柜", "length": 5898, "width": 2352, "height": 2395, "max_weight": 28000 },
+    { "id": "40GP", "name": "40尺普柜", "length": 12032, "width": 2352, "height": 2395, "max_weight": 28000 },
+    { "id": "40HQ", "name": "40尺高柜", "length": 12032, "width": 2352, "height": 2695, "max_weight": 28000 }
+  ]
+}
