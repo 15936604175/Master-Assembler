@@ -25,8 +25,10 @@ const genId = (index: number) => String.fromCharCode(65 + (index % 26));
 function IsoCube3D({ dx, dy, dz, checked }: {
   dx: number; dy: number; dz: number; checked?: boolean;
 }) {
-  const max = Math.max(dx, dy, dz);
-  const scale = 28 / max;
+  const longest = Math.max(dx, dy, dz);
+  // 根据实际尺寸自适应缩放：对数曲线，小件≥18px、大件≤42px
+  const targetPx = Math.min(42, Math.max(18, 16 + Math.log(longest) * 4.2));
+  const scale = targetPx / longest;
   const sx = dx * scale;
   const sy = dy * scale;
   const sz = dz * scale;
@@ -37,10 +39,9 @@ function IsoCube3D({ dx, dy, dz, checked }: {
     py: (x + z) * s - y,
   });
 
-  const pts = (poly: number[][]) =>
-    poly.map((v) => `${p(v[0],v[1],v[2]).px.toFixed(1)},${p(v[0],v[1],v[2]).py.toFixed(1)}`).join(' ');
+  const toPts = (poly: number[][]) =>
+    poly.map(v => `${p(v[0],v[1],v[2]).px.toFixed(1)},${p(v[0],v[1],v[2]).py.toFixed(1)}`).join(' ');
 
-  // 六个面  渲染顺序: 后→左→下→上→右→前
   const color = checked ? '#3b82f6' : '#9ca3af';
   const alpha = '55';
   const faceData = [
@@ -52,7 +53,6 @@ function IsoCube3D({ dx, dy, dz, checked }: {
     { pts: [[0,0,0],[sx,0,0],[sx,sy,0],[0,sy,0]],     fill: color + alpha },
   ];
 
-  // 12条棱
   const edgePairs = [
     [0,1],[2,4],[3,5],[6,7], [0,2],[1,4],[3,6],[5,7], [0,3],[1,5],[2,6],[4,7],
   ];
@@ -62,16 +62,21 @@ function IsoCube3D({ dx, dy, dz, checked }: {
   ];
 
   const allPx = verts.map(v => v.px), allPy = verts.map(v => v.py);
-  const tx = -(Math.min(...allPx) + Math.max(...allPx)) / 2 + 28;
-  const ty = -(Math.min(...allPy) + Math.max(...allPy)) / 2 + 30;
+  const minX = Math.min(...allPx), maxX = Math.max(...allPx);
+  const minY = Math.min(...allPy), maxY = Math.max(...allPy);
+  const svgW = Math.max(48, Math.ceil(maxX - minX) + 10);
+  const svgH = Math.max(48, Math.ceil(maxY - minY) + 10);
+  const cx = svgW / 2, cy = svgH / 2;
+  const tx = -(minX + maxX) / 2 + cx;
+  const ty = -(minY + maxY) / 2 + cy;
 
   const strokeColor = checked ? '#1d4ed8' : '#6b7280';
 
   return (
-    <svg width={56} height={60} style={{ display: 'block' }}>
+    <svg width={svgW} height={svgH} style={{ display: 'block' }}>
       <g transform={`translate(${tx.toFixed(1)},${ty.toFixed(1)})`}>
         {faceData.map((d, i) => (
-          <polygon key={i} points={pts(d.pts)} fill={d.fill} stroke="none" />
+          <polygon key={i} points={toPts(d.pts)} fill={d.fill} stroke="none" />
         ))}
         {edgePairs.map((pair, k) => {
           const [i, j] = pair;

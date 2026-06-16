@@ -62,10 +62,10 @@ export default function PlacedItem({
         <meshStandardMaterial
           color={color}
           opacity={opacity}
-          transparent
+          transparent={opacity < 1}
           emissive={emissive}
           emissiveIntensity={emissiveIntensity}
-          depthWrite={true}
+          depthWrite={opacity >= 0.8}
           depthTest={true}
           side={THREE.FrontSide}
           roughness={0.4}
