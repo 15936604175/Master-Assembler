@@ -2,7 +2,7 @@
 
 # 测试朝向约束
 
-echo "测试朝向约束 - 高度必须垂直 (forbidden_horizontal_dim='height')"
+echo "测试朝向约束 - 立着放 (forbidden_horizontal_dims=['height'], H竖直)"
 curl -X POST http://127.0.0.1:8000/api/optimize \
   -H "Content-Type: application/json" \
   -d '{
@@ -22,12 +22,12 @@ curl -X POST http://127.0.0.1:8000/api/optimize \
         "quantity": 1,
         "is_fragile": false,
         "batch_number": 0,
-        "forbidden_horizontal_dim": "height"
+        "forbidden_horizontal_dims": ["height"]
       }
     ]
   }' | python3 -m json.tool
 
-echo "\n\n测试朝向约束 - 宽度必须垂直 (forbidden_horizontal_dim='width')"
+echo "\n\n测试朝向约束 - 躺着放 (forbidden_horizontal_dims=['width'], W竖直)"
 curl -X POST http://127.0.0.1:8000/api/optimize \
   -H "Content-Type: application/json" \
   -d '{
@@ -47,12 +47,12 @@ curl -X POST http://127.0.0.1:8000/api/optimize \
         "quantity": 1,
         "is_fragile": false,
         "batch_number": 0,
-        "forbidden_horizontal_dim": "width"
+        "forbidden_horizontal_dims": ["width"]
       }
     ]
   }' | python3 -m json.tool
 
-echo "\n\n测试朝向约束 - 长度必须垂直 (forbidden_horizontal_dim='length')"
+echo "\n\n测试朝向约束 - 平着放 (forbidden_horizontal_dims=['length'], L竖直)"
 curl -X POST http://127.0.0.1:8000/api/optimize \
   -H "Content-Type: application/json" \
   -d '{
@@ -72,7 +72,7 @@ curl -X POST http://127.0.0.1:8000/api/optimize \
         "quantity": 1,
         "is_fragile": false,
         "batch_number": 0,
-        "forbidden_horizontal_dim": "length"
+        "forbidden_horizontal_dims": ["length"]
       }
     ]
   }' | python3 -m json.tool

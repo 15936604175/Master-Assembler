@@ -105,7 +105,7 @@ def test_ga_empty_items(container):
 def test_allowed_orientations(container):
     items_constrained = [
         ItemInput(id="X", length=100, width=60, height=40, weight=10, quantity=1,
-                  forbidden_horizontal_dim="height"),
+                  forbidden_horizontal_dims=["height"]),
     ]
     ga = GeneticOptimizer(container, items_constrained,
                           GAConfig(population_size=5, generations=3))

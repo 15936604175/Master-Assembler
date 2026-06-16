@@ -14,7 +14,7 @@ export interface ItemInput {
   quantity: number;
   is_fragile?: boolean;
   batch_number?: number;
-  forbidden_horizontal_dim?: 'length' | 'width' | 'height' | null;
+  forbidden_horizontal_dims?: string[];
 }
 
 export interface OptimizeRequest {

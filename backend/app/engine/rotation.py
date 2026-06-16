@@ -1,16 +1,26 @@
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 """
 Orientation definitions (沿X, 沿Y, 沿Z):
   Orientation 1 (height_vertical):  (L, H, W) - height is vertical, base is L×W
   Orientation 2 (width_vertical):   (L, W, H) - width is vertical, base is L×H
   Orientation 3 (length_vertical):  (W, H, L) - length is vertical, base is W×H
-  
-  Note: (rot_l, rot_h, rot_w) where:
-    - rot_l: dimension along X-axis (length direction)
-    - rot_h: dimension along Y-axis (height/vertical direction)
-    - rot_w: dimension along Z-axis (width direction)
+
+  Each orientation has one vertical dimension and two horizontal dimensions.
+  forbidden_horizontal_dims specifies which dimensions CANNOT be horizontal.
+  An orientation is excluded if ANY of its horizontal dimensions is in the forbidden list.
+
+  Example: forbidden_horizontal_dims = ["height"]
+    - height_vertical: horizontal={length, width} → height not in horizontal → ALLOWED
+    - width_vertical:  horizontal={length, height} → height IS horizontal → EXCLUDED
+    - length_vertical: horizontal={width, height} → height IS horizontal → EXCLUDED
 """
+
+ORIENTATION_HORIZONTAL = {
+    "height_vertical": {"length", "width"},
+    "width_vertical": {"length", "height"},
+    "length_vertical": {"width", "height"},
+}
 
 
 def get_all_rotations(length: float, width: float, height: float) -> List[Tuple[float, float, float]]:
@@ -26,57 +36,48 @@ def get_all_rotations(length: float, width: float, height: float) -> List[Tuple[
 
 def get_allowed_orientations(
     length: float, width: float, height: float,
-    forbidden_horizontal_dim: Optional[str],
+    forbidden_horizontal_dims: List[str],
 ) -> List[Tuple[Tuple[float, float, float], str, str]]:
     """
-    Returns allowed orientations based on forbidden_horizontal_dim constraint.
+    Returns allowed orientations based on forbidden_horizontal_dims constraint.
 
-    forbidden_horizontal_dim:
-      - None: all 3 orientations allowed
-      - 'height': height cannot be horizontal → only orientation 1 (height_vertical)
-      - 'width': width cannot be horizontal → only orientation 2 (width_vertical)
-      - 'length': length cannot be horizontal → only orientation 3 (length_vertical)
+    forbidden_horizontal_dims:
+      - []: all 3 orientations allowed
+      - ['height']: height cannot be horizontal → only orientation 1 (height_vertical)
+      - ['width']: width cannot be horizontal → only orientation 2 (width_vertical)
+      - ['length']: length cannot be horizontal → only orientation 3 (length_vertical)
+      - ['height', 'length']: height AND length cannot be horizontal → impossible (excluded all)
 
     Returns list of (dimensions_tuple, rotation_label, orientation_name).
     """
     all_orientations = [
-        ((length, width, height), "lwh", "height_vertical"),    # height垂直，底面L×W
-        ((length, height, width), "lhw", "width_vertical"),     # width垂直，底面L×H
-        ((width, height, length), "whl", "length_vertical"),    # length垂直，底面W×H
+        ((length, width, height), "lwh", "height_vertical"),    # H vertical, base L×W
+        ((length, height, width), "lhw", "width_vertical"),     # W vertical, base L×H
+        ((width, height, length), "whl", "length_vertical"),    # L vertical, base W×H
     ]
 
-    if forbidden_horizontal_dim is None:
+    if not forbidden_horizontal_dims:
         return all_orientations
 
-    if forbidden_horizontal_dim == "height":
-        return [all_orientations[0]]
-    elif forbidden_horizontal_dim == "width":
-        return [all_orientations[1]]
-    elif forbidden_horizontal_dim == "length":
-        return [all_orientations[2]]
+    forbidden = set(forbidden_horizontal_dims)
 
-    return all_orientations
+    def is_allowed(orient_name: str) -> bool:
+        horizontal = ORIENTATION_HORIZONTAL[orient_name]
+        return not bool(forbidden & horizontal)
+
+    return [o for o in all_orientations if is_allowed(o[2])]
 
 
 def get_orientation_for_rotation(
     length: float, width: float, height: float,
     rot_l: float, rot_w: float, rot_h: float,
 ) -> str:
-    """
-    Given original dimensions and rotation dimensions, determine which dimension is vertical.
-    The vertical dimension is the one that equals 'height' (the axis going up in the container).
-    Orientation is determined by which original dimension's length appears in the rot_h position:
-      - rot_h == height: height_vertical (height stays as vertical axis)
-      - rot_h == width: width_vertical (width becomes vertical axis)
-      - rot_h == length: length_vertical (length becomes vertical axis)
-    """
     if abs(rot_h - height) < 0.01:
         return "height_vertical"
     elif abs(rot_h - width) < 0.01:
         return "width_vertical"
     elif abs(rot_h - length) < 0.01:
         return "length_vertical"
-    # Fallback for floating-point edge cases
     closest = min(
         ("height", height), ("width", width), ("length", length),
         key=lambda t: abs(rot_h - t[1])

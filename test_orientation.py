@@ -11,9 +11,9 @@ def test_orientation_constraint():
         "max_weight": 28000
     }
     
-    # 测试1: 高度必须垂直
+    # 测试1: 立着放（height不能水平 → H竖直）
     print("=" * 60)
-    print("测试1: forbidden_horizontal_dim='height' (高度必须垂直)")
+    print("测试1: forbidden_horizontal_dims=['height'] (立着放, H竖直)")
     print("原始尺寸: L=800, W=600, H=500")
     print("期望: orientation='height_vertical', 旋转后尺寸=(800, 500, 600)")
     print("=" * 60)
@@ -28,8 +28,7 @@ def test_orientation_constraint():
             "weight": 100,
             "quantity": 1,
             "is_fragile": False,
-            "batch_number": 0,
-            "forbidden_horizontal_dim": "height"
+            "forbidden_horizontal_dims": ["height"]
         }]
     })
     
@@ -56,9 +55,9 @@ def test_orientation_constraint():
     else:
         print("✗ 放置失败")
     
-    # 测试2: 宽度必须垂直
+    # 测试2: 躺着放（width不能水平 → W竖直）
     print("\n" + "=" * 60)
-    print("测试2: forbidden_horizontal_dim='width' (宽度必须垂直)")
+    print("测试2: forbidden_horizontal_dims=['width'] (躺着放, W竖直)")
     print("原始尺寸: L=800, W=600, H=500")
     print("期望: orientation='width_vertical', 旋转后尺寸=(800, 600, 500)")
     print("=" * 60)
@@ -74,7 +73,7 @@ def test_orientation_constraint():
             "quantity": 1,
             "is_fragile": False,
             "batch_number": 0,
-            "forbidden_horizontal_dim": "width"
+            "forbidden_horizontal_dims": ["width"]
         }]
     })
     
@@ -101,9 +100,9 @@ def test_orientation_constraint():
     else:
         print("✗ 放置失败")
     
-    # 测试3: 长度必须垂直
+    # 测试3: 平着放（length不能水平 → L竖直）
     print("\n" + "=" * 60)
-    print("测试3: forbidden_horizontal_dim='length' (长度必须垂直)")
+    print("测试3: forbidden_horizontal_dims=['length'] (平着放, L竖直)")
     print("原始尺寸: L=800, W=600, H=500")
     print("期望: orientation='length_vertical', 旋转后尺寸=(600, 800, 500)")
     print("=" * 60)
@@ -119,7 +118,7 @@ def test_orientation_constraint():
             "quantity": 1,
             "is_fragile": False,
             "batch_number": 0,
-            "forbidden_horizontal_dim": "length"
+            "forbidden_horizontal_dims": ["length"]
         }]
     })
     

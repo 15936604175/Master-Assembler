@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional, Literal
+from typing import List
 
 
 class ItemInput(BaseModel):
@@ -9,18 +9,23 @@ class ItemInput(BaseModel):
     height: float = Field(gt=0, description="Item height (mm)")
     weight: float = Field(gt=0, description="Item weight (kg)")
     quantity: int = Field(gt=0, le=10000, description="Item quantity")
-    is_fragile: Optional[bool] = Field(default=False, description="Whether the item is fragile")
+    is_fragile: bool = Field(default=False, description="Whether the item is fragile")
     batch_number: int = Field(default=0, ge=0, description="Batch number, smaller is placed first")
-    forbidden_horizontal_dim: Optional[Literal["length", "width", "height"]] = Field(
-        default=None,
-        description="Which dimension cannot be horizontal: 'length', 'width', 'height', or null"
+    forbidden_horizontal_dims: List[str] = Field(
+        default_factory=list,
+        description="Dimensions that cannot be horizontal. Empty list = no constraint. "
+                    "Values: 'length', 'width', 'height'. "
+                    "e.g. ['length'] = length must be vertical (face W×H on ground)."
     )
 
-    @field_validator("forbidden_horizontal_dim")
+    @field_validator("forbidden_horizontal_dims")
     @classmethod
-    def validate_forbidden_dim(cls, v):
-        if v is not None and v not in ("length", "width", "height"):
-            raise ValueError("forbidden_horizontal_dim must be 'length', 'width', 'height' or null")
+    def validate_forbidden_dims(cls, v):
+        allowed = {"length", "width", "height"}
+        if not all(dim in allowed for dim in v):
+            raise ValueError(
+                f"forbidden_horizontal_dims must contain only 'length', 'width', 'height'"
+            )
         return v
 
 
@@ -32,4 +37,4 @@ class ItemInstance(BaseModel):
     weight: float
     is_fragile: bool = False
     batch_number: int = 0
-    forbidden_horizontal_dim: Optional[str] = None
+    forbidden_horizontal_dims: List[str] = Field(default_factory=list)

@@ -47,7 +47,7 @@ class EPacker:
                     weight=item.weight,
                     is_fragile=bool(item.is_fragile),
                     batch_number=item.batch_number or 0,
-                    forbidden_horizontal_dim=item.forbidden_horizontal_dim,
+                    forbidden_horizontal_dims=item.forbidden_horizontal_dims,
                 ))
 
         instances.sort(
@@ -139,17 +139,22 @@ class EPacker:
             cg_deviation_ratio=round(cg_deviation, 4),
         )
 
-    def _try_place(self, item: ItemInstance) -> bool:
+    def _try_place(self, item: ItemInstance,
+                   forced_orientation: Optional[Tuple[Tuple[float, float, float], str, str]] = None
+                   ) -> bool:
         best_score = -float("inf")
         best_placement: Optional[Tuple[float, float, float, float, float, float]] = None
         best_rot = ""
         best_orientation = ""
         best_metrics: Dict = {}
 
-        allowed_orientations = get_allowed_orientations(
-            item.length, item.width, item.height,
-            item.forbidden_horizontal_dim,
-        )
+        if forced_orientation is not None:
+            allowed_orientations = [forced_orientation]
+        else:
+            allowed_orientations = get_allowed_orientations(
+                item.length, item.width, item.height,
+                item.forbidden_horizontal_dims,
+            )
 
         for (rot_l, rot_w, rot_h), rot_label, orientation_name in allowed_orientations:
             item_size = (rot_l, rot_h, rot_w)

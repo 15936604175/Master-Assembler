@@ -43,7 +43,7 @@ class OptimizerBase:
                     weight=item.weight,
                     is_fragile=bool(item.is_fragile),
                     batch_number=item.batch_number or 0,
-                    forbidden_horizontal_dim=item.forbidden_horizontal_dim,
+                    forbidden_horizontal_dims=item.forbidden_horizontal_dims,
                 ))
         instances.sort(key=lambda x: (
             x.batch_number,
@@ -53,13 +53,13 @@ class OptimizerBase:
         return instances
 
     def _build_rotation_constraints(self):
-        """Pre-compute allowed rotation indices per instance."""
+        """Pre-compute allowed orientation indices per instance."""
         self.allowed_rotations: List[List[int]] = []
         for inst in self.instances:
             all_rots = get_all_rotations(inst.length, inst.width, inst.height)
             allowed_orientations = get_allowed_orientations(
                 inst.length, inst.width, inst.height,
-                inst.forbidden_horizontal_dim,
+                inst.forbidden_horizontal_dims,
             )
             allowed_indices = []
             for (rl, rw, rh), _, _ in allowed_orientations:
@@ -75,29 +75,46 @@ class OptimizerBase:
         return get_all_rotations(inst.length, inst.width, inst.height)
 
     def _decode(self, chromosome: List[int]) -> List[Dict]:
-        """Decode chromosome (rotation indices) into placement dicts."""
+        """Decode chromosome (orientation indices) into placement dicts."""
         packer = EPacker()
         packer.container = (self.container.length, self.container.height, self.container.width)
         packer.container_volume = self.container.length * self.container.height * self.container.width
-        for inst_idx, rot_idx in enumerate(chromosome):
+        for inst_idx, orient_idx in enumerate(chromosome):
             allowed = self.allowed_rotations[inst_idx]
             if not allowed:
                 continue
-            actual_rot = allowed[rot_idx % len(allowed)]
+            actual_rot_idx = allowed[orient_idx % len(allowed)]
             inst = self.instances[inst_idx]
-            rot_l, rot_w, rot_h = get_all_rotations(inst.length, inst.width, inst.height)[actual_rot]
+
+            allowed_orientations = get_allowed_orientations(
+                inst.length, inst.width, inst.height,
+                inst.forbidden_horizontal_dims,
+            )
+
+            all_rots = get_all_rotations(inst.length, inst.width, inst.height)
+            rot_l, rot_w, rot_h = all_rots[actual_rot_idx]
+
+            chosen_orientation = None
+            for o in allowed_orientations:
+                (rl, rw, rh), label, name = o
+                if abs(rl - rot_l) < 0.01 and abs(rw - rot_w) < 0.01 and abs(rh - rot_h) < 0.01:
+                    chosen_orientation = o
+                    break
+
+            if chosen_orientation is None:
+                continue
 
             modified = ItemInstance(
                 item_id=inst.item_id,
-                length=rot_l,
-                width=rot_w,
-                height=rot_h,
+                length=inst.length,
+                width=inst.width,
+                height=inst.height,
                 weight=inst.weight,
                 is_fragile=inst.is_fragile,
                 batch_number=inst.batch_number,
-                forbidden_horizontal_dim=inst.forbidden_horizontal_dim,
+                forbidden_horizontal_dims=inst.forbidden_horizontal_dims,
             )
-            if not packer._try_place(modified):
+            if not packer._try_place(modified, forced_orientation=chosen_orientation):
                 break
         return packer.placements
 

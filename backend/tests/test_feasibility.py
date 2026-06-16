@@ -99,17 +99,16 @@ def test_verifier_stability_score(container, items):
 
 def test_verifier_orientation_constraint(container):
     """
-    forbidden_horizontal_dim='height' means height cannot be horizontal.
+    forbidden_horizontal_dims=['height'] means height cannot be horizontal.
     - "height_vertical": height is vertical → VALID
     - "width_vertical": width is vertical → height is horizontal → INVALID
     """
     items_with_constraint = [
         ItemInput(id="X", length=100, width=50, height=30, weight=5, quantity=1,
-                  forbidden_horizontal_dim="height"),
+                  forbidden_horizontal_dims=["height"]),
     ]
     verifier = FeasibilityVerifier(container, items_with_constraint)
 
-    # Place on floor (y=0) and centered in X/Z; "height_vertical" is valid
     placements_valid = [
         {"item_id": "X", "x": 50, "y": 0, "z": 75, "l": 100, "h": 30, "w": 50,
          "weight": 5, "orientation": "height_vertical"},
@@ -117,7 +116,6 @@ def test_verifier_orientation_constraint(container):
     report = verifier.verify(placements_valid)
     assert report.orientation_ok is True
 
-    # "width_vertical" makes height horizontal → violates forbidden='height'
     placements_invalid = [
         {"item_id": "X", "x": 50, "y": 0, "z": 75, "l": 100, "h": 50, "w": 30,
          "weight": 5, "orientation": "width_vertical"},
@@ -125,6 +123,21 @@ def test_verifier_orientation_constraint(container):
     report2 = verifier.verify(placements_invalid)
     assert report2.orientation_ok is False
     assert report2.orientation_violations >= 1
+
+
+def test_verifier_orientation_multiple_constraints(container):
+    items = [
+        ItemInput(id="Y", length=100, width=50, height=30, weight=5, quantity=1,
+                  forbidden_horizontal_dims=["height", "length"]),
+    ]
+    verifier = FeasibilityVerifier(container, items)
+
+    placements = [
+        {"item_id": "Y", "x": 0, "y": 0, "z": 0, "l": 100, "h": 30, "w": 50,
+         "weight": 5, "orientation": "height_vertical"},
+    ]
+    report = verifier.verify(placements)
+    assert report.orientation_ok is False
 
 
 def test_verifier_fragile_violations(container):

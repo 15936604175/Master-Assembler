@@ -8,7 +8,7 @@ Validates packing solutions against all constraints:
 - Stability scoring
 """
 
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 from dataclasses import dataclass, field
 from app.models.container import ContainerConfig
 from app.models.item import ItemInput
@@ -39,7 +39,6 @@ class FeasibilityVerifier:
         self.container_dims = (container.length, container.height, container.width)
         self.max_weight = container.max_weight
 
-        # Build item lookup by ID
         self.item_specs: Dict[str, Dict] = {}
         for item in items:
             self.item_specs[item.id] = {
@@ -49,7 +48,7 @@ class FeasibilityVerifier:
                 "weight": item.weight,
                 "is_fragile": item.is_fragile or False,
                 "batch_number": item.batch_number or 0,
-                "forbidden_horizontal_dim": item.forbidden_horizontal_dim,
+                "forbidden_horizontal_dims": item.forbidden_horizontal_dims,
             }
 
     def verify(self, placements: List[Dict]) -> VerificationReport:
@@ -148,8 +147,14 @@ class FeasibilityVerifier:
 
         return True, messages, total_weight
 
+    ORIENTATION_HORIZONTAL = {
+        "height_vertical": {"length", "width"},
+        "width_vertical": {"length", "height"},
+        "length_vertical": {"width", "height"},
+    }
+
     def _verify_orientation(self, placements: List[Dict]) -> Tuple[bool, List[str]]:
-        """Check forbidden_horizontal_dim constraints."""
+        """Check forbidden_horizontal_dims constraints."""
         violations = self._count_orientation_violations(placements)
         ok = violations == 0
         messages = []
@@ -158,55 +163,35 @@ class FeasibilityVerifier:
             spec = self.item_specs.get(item_id)
             if not spec:
                 continue
-            forbidden = spec.get("forbidden_horizontal_dim")
-            if not forbidden:
+            forbidden_list = spec.get("forbidden_horizontal_dims", [])
+            if not forbidden_list:
                 continue
             orientation = p.get("orientation", "")
-            if orientation == "height_vertical":
-                horizontal = {"height", "width", "length"} - {"height"}
-            elif orientation == "width_vertical":
-                horizontal = {"height", "width", "length"} - {"width"}
-            elif orientation == "length_vertical":
-                horizontal = {"height", "width", "length"} - {"length"}
-            else:
+            if orientation not in self.ORIENTATION_HORIZONTAL:
                 continue
-            if forbidden in horizontal:
+            horizontal = self.ORIENTATION_HORIZONTAL[orientation]
+            violating = set(forbidden_list) & horizontal
+            if violating:
                 messages.append(
-                    f"[朝向] 商品 {item_id} 禁止水平维度 '{forbidden}' 但实际为水平"
+                    f"[朝向] 商品 {item_id} 禁止水平维度 {list(violating)} 但实际为水平"
                 )
-
         return ok, messages
 
     def _count_orientation_violations(self, placements: List[Dict]) -> int:
-        """
-        Count violations: if a dimension is forbidden from being horizontal,
-        it must NOT appear as a horizontal dimension in the placement.
-
-        orientation names:
-          - "height_vertical": height is vertical → width and length are horizontal → ok for "forbidden_horizontal_dim=width" or "forbidden_horizontal_dim=length"
-          - "width_vertical": width is vertical → height and length are horizontal → ok for "forbidden_horizontal_dim=length"
-          - "length_vertical": length is vertical → height and width are horizontal → ok for none of the three
-        """
         count = 0
         for p in placements:
             item_id = p["item_id"]
             spec = self.item_specs.get(item_id)
             if not spec:
                 continue
-            forbidden = spec.get("forbidden_horizontal_dim")
-            if not forbidden:
+            forbidden_list = spec.get("forbidden_horizontal_dims", [])
+            if not forbidden_list:
                 continue
             orientation = p.get("orientation", "")
-            # Determine which dimensions are horizontal
-            if orientation == "height_vertical":
-                horizontal = {"height", "width", "length"} - {"height"}
-            elif orientation == "width_vertical":
-                horizontal = {"height", "width", "length"} - {"width"}
-            elif orientation == "length_vertical":
-                horizontal = {"height", "width", "length"} - {"length"}
-            else:
+            if orientation not in self.ORIENTATION_HORIZONTAL:
                 continue
-            if forbidden in horizontal:
+            horizontal = self.ORIENTATION_HORIZONTAL[orientation]
+            if set(forbidden_list) & horizontal:
                 count += 1
         return count
 

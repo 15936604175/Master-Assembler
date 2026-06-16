@@ -26,26 +26,36 @@ def test_get_all_rotations_cube():
 
 
 def test_allowed_orientations_no_constraint():
-    result = get_allowed_orientations(100, 80, 50, None)
+    result = get_allowed_orientations(100, 80, 50, [])
     assert len(result) == 3
 
 
 def test_allowed_orientations_forbid_height():
-    result = get_allowed_orientations(100, 80, 50, "height")
+    result = get_allowed_orientations(100, 80, 50, ["height"])
     assert len(result) == 1
     assert result[0][2] == "height_vertical"
 
 
 def test_allowed_orientations_forbid_width():
-    result = get_allowed_orientations(100, 80, 50, "width")
+    result = get_allowed_orientations(100, 80, 50, ["width"])
     assert len(result) == 1
     assert result[0][2] == "width_vertical"
 
 
 def test_allowed_orientations_forbid_length():
-    result = get_allowed_orientations(100, 80, 50, "length")
+    result = get_allowed_orientations(100, 80, 50, ["length"])
     assert len(result) == 1
     assert result[0][2] == "length_vertical"
+
+
+def test_allowed_orientations_multiple_forbidden():
+    result = get_allowed_orientations(100, 80, 50, ["height", "width"])
+    assert len(result) == 0
+
+
+def test_allowed_orientations_all_forbidden_returns_empty():
+    result = get_allowed_orientations(100, 80, 50, ["height", "width", "length"])
+    assert len(result) == 0
 
 
 def test_orientation_for_rotation_height_vertical():

@@ -37,7 +37,7 @@ export default function InputPage({ onOptimizeComplete }: InputPageProps) {
       quantity: item.quantity,
       is_fragile: item.is_fragile || false,
       batch_number: item.batch_number ?? 0,
-      forbidden_horizontal_dim: item.forbidden_horizontal_dim ?? null,
+      forbidden_horizontal_dims: item.forbidden_horizontal_dims ?? [],
     }));
 
   const handleOptimize = async () => {

@@ -11,7 +11,7 @@ export interface ItemRow {
   quantity: number;
   is_fragile?: boolean;
   batch_number?: number;
-  forbidden_horizontal_dim?: 'length' | 'width' | 'height' | null;
+  forbidden_horizontal_dims?: string[];
 }
 
 interface ItemListEditorProps {
@@ -21,202 +21,109 @@ interface ItemListEditorProps {
 
 const genId = (index: number) => String.fromCharCode(65 + (index % 26));
 
-/** 朝向模式定义 */
-const ORIENTATION_MODES = [
-  {
-    key: 'standard',
-    label: 'Standard',
-    labelCN: '标准放置',
-    forbidden: null as 'length' | 'width' | 'height' | null,
-    rotations: [
-      { angle: 0, label: '0°', dims: (l: number, w: number, h: number) => ({ dx: l, dy: h, dz: w }) },
-      { angle: 90, label: '90°', dims: (l: number, w: number, h: number) => ({ dx: w, dy: h, dz: l }) },
-    ],
-  },
-  {
-    key: 'turn_up',
-    label: 'Turn up',
-    labelCN: '竖立放置',
-    forbidden: 'length' as const,
-    rotations: [
-      { angle: 0, label: '0°', dims: (l: number, w: number, h: number) => ({ dx: w, dy: l, dz: h }) },
-      { angle: 90, label: '90°', dims: (l: number, w: number, h: number) => ({ dx: h, dy: l, dz: w }) },
-    ],
-  },
-  {
-    key: 'turn_side',
-    label: 'Turn side',
-    labelCN: '侧向放置',
-    forbidden: 'width' as const,
-    rotations: [
-      { angle: 0, label: '0°', dims: (l: number, w: number, h: number) => ({ dx: l, dy: w, dz: h }) },
-      { angle: 90, label: '90°', dims: (l: number, w: number, h: number) => ({ dx: h, dy: w, dz: l }) },
-    ],
-  },
-];
-
-/** 蓝色风格3D盒子 - 模仿参考软件 */
-function BlueCube3D({ dx, dy, dz, checked }: {
+/** 等轴测3D长方体（六面半透明 + 线框） */
+function IsoCube3D({ dx, dy, dz, checked }: {
   dx: number; dy: number; dz: number; checked?: boolean;
 }) {
   const max = Math.max(dx, dy, dz);
-  const scale = 32 / max;
+  const scale = 28 / max;
   const sx = dx * scale;
   const sy = dy * scale;
   const sz = dz * scale;
 
-  // 等轴测投影矩阵
-  const project = ([x, y, z]: number[]) => ({
-    px: x * 0.866 - z * 0.5,
-    py: x * 0.5 + y * z * 0.866,
+  const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6);
+  const p = (x: number, y: number, z: number) => ({
+    px: (x - z) * c,
+    py: (x + z) * s - y,
   });
 
-  const topFace = [[0,sy,0], [sx,sy,0], [sx,sy,sz], [0,sy,sz]].map(project);
-  const frontFace = [[0,0,0], [sx,0,0], [sx,sy,0], [0,sy,0]].map(project);
-  const rightFace = [[sx,0,0], [sx,0,sz], [sx,sy,sz], [sx,sy,0]].map(project);
+  const pts = (poly: number[][]) =>
+    poly.map((v) => `${p(v[0],v[1],v[2]).px.toFixed(1)},${p(v[0],v[1],v[2]).py.toFixed(1)}`).join(' ');
 
-  const toPoly = (pts: typeof frontFace) =>
-    pts.map(p => `${p.px},${p.py}`).join(' ');
+  // 六个面  渲染顺序: 后→左→下→上→右→前
+  const color = checked ? '#3b82f6' : '#9ca3af';
+  const alpha = '55';
+  const faceData = [
+    { pts: [[0,0,sz],[sx,0,sz],[sx,sy,sz],[0,sy,sz]], fill: '#6b7280' + alpha },
+    { pts: [[0,0,0],[0,0,sz],[0,sy,sz],[0,sy,0]],     fill: '#8b5cf6' + alpha },
+    { pts: [[0,0,0],[sx,0,0],[sx,0,sz],[0,0,sz]],     fill: '#f59e0b' + alpha },
+    { pts: [[0,sy,0],[sx,sy,0],[sx,sy,sz],[0,sy,sz]], fill: '#10b981' + alpha },
+    { pts: [[sx,0,0],[sx,0,sz],[sx,sy,sz],[sx,sy,0]], fill: '#ec4899' + alpha },
+    { pts: [[0,0,0],[sx,0,0],[sx,sy,0],[0,sy,0]],     fill: color + alpha },
+  ];
 
-  const allPts = [...topFace, ...frontFace, ...rightFace];
-  const minX = Math.min(...allPts.map(p => p.px)), maxX = Math.max(...allPts.map(p => p.px));
-  const minY = Math.min(...allPts.map(p => p.py)), maxY = Math.max(...allPts.map(p => p.py));
-  const offX = -(minX + maxX) / 2;
-  const offY = -(minY + maxY) / 2;
+  // 12条棱
+  const edgePairs = [
+    [0,1],[2,4],[3,5],[6,7], [0,2],[1,4],[3,6],[5,7], [0,3],[1,5],[2,6],[4,7],
+  ];
+  const verts = [
+    p(0,0,0), p(sx,0,0), p(0,sy,0), p(0,0,sz),
+    p(sx,sy,0), p(sx,0,sz), p(0,sy,sz), p(sx,sy,sz),
+  ];
 
-  const transform = `translate(${offX + 28}px, ${offY + 34}px)`;
-  const fillBase = checked ? '#2563eb' : '#3b82f6';
-  const fillLight = checked ? '#60a5fa' : '#93c5fd';
-  const strokeColor = checked ? '#1e40af' : '#2563eb';
+  const allPx = verts.map(v => v.px), allPy = verts.map(v => v.py);
+  const tx = -(Math.min(...allPx) + Math.max(...allPx)) / 2 + 28;
+  const ty = -(Math.min(...allPy) + Math.max(...allPy)) / 2 + 30;
+
+  const strokeColor = checked ? '#1d4ed8' : '#6b7280';
 
   return (
-    <svg width="56" height="68" style={{ display: 'block' }}>
-      <g transform={transform}>
-        {/* 顶面 */}
-        <polygon points={toPoly(topFace)} fill={fillLight} stroke={strokeColor} strokeWidth="0.8" />
-        {/* 前面 */}
-        <polygon points={toPoly(frontFace)} fill={fillBase} stroke={strokeColor} strokeWidth="0.8" />
-        {/* 右面 */}
-        <polygon points={toPoly(rightFace)} fill={checked ? '#3b82f6' : '#60a5fa'} stroke={strokeColor} strokeWidth="0.8" />
+    <svg width={56} height={60} style={{ display: 'block' }}>
+      <g transform={`translate(${tx.toFixed(1)},${ty.toFixed(1)})`}>
+        {faceData.map((d, i) => (
+          <polygon key={i} points={pts(d.pts)} fill={d.fill} stroke="none" />
+        ))}
+        {edgePairs.map((pair, k) => {
+          const [i, j] = pair;
+          return (
+            <line key={k} x1={verts[i].px} y1={verts[i].py}
+                  x2={verts[j].px} y2={verts[j].py}
+                  stroke={strokeColor} strokeWidth="1" strokeLinecap="round" />
+          );
+        })}
       </g>
     </svg>
   );
 }
 
-/** 朝向选择器 - 模仿参考软件UI */
 function OrientationSelector({ item, onUpdate }: {
   item: ItemRow;
   onUpdate: (field: keyof ItemRow, val: any) => void;
 }) {
-  const selectedMode = item.forbidden_horizontal_dim;
+  const forbiddenDims = item.forbidden_horizontal_dims ?? [];
 
-  const handleSelect = (modeKey: string | null) => {
-    if (selectedMode === modeKey) {
-      // 点击已选中的模式取消选择 → 无约束
-      onUpdate('forbidden_horizontal_dim', null);
+  const isDisabled = (dim: string) => forbiddenDims.includes(dim);
+
+  const toggleMode = (dim: string) => {
+    if (isDisabled(dim)) {
+      onUpdate('forbidden_horizontal_dims', forbiddenDims.filter(d => d !== dim));
     } else {
-      // 选择新模式
-      const mode = ORIENTATION_MODES.find(m => m.key === modeKey);
-      onUpdate('forbidden_horizontal_dim', mode?.forbidden ?? null);
+      onUpdate('forbidden_horizontal_dims', [...forbiddenDims, dim]);
     }
   };
 
+  const modes = [
+    { key: 'a', forbid: 'height', fn: (l: number, w: number, h: number) => ({ dx: l, dy: h, dz: w }) },
+    { key: 'b', forbid: 'length', fn: (l: number, w: number, h: number) => ({ dx: w, dy: l, dz: h }) },
+    { key: 'c', forbid: 'width',  fn: (l: number, w: number, h: number) => ({ dx: l, dy: w, dz: h }) },
+  ];
+
   return (
     <div style={{
-      display: 'flex',
-      gap: 16,
-      padding: '8px 12px',
-      background: '#fafafa',
-      borderRadius: 6,
-      border: '1px solid #e8e8e8',
+      display: 'flex', gap: 6, padding: '6px 8px',
+      background: '#fafafa', borderRadius: 6, border: '1px solid #e8e8e8',
     }}>
-      {ORIENTATION_MODES.map((mode) => {
-        const isSelected = selectedMode === mode.forbidden;
+      {modes.map((mode) => {
+        const disabled = isDisabled(mode.forbid);
+        const { dx, dy, dz } = mode.fn(item.length, item.width, item.height);
         return (
-          <div
-            key={mode.key}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              minWidth: 100,
-            }}
-          >
-            {/* 标题 */}
-            <div style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: isSelected ? '#1677ff' : '#666',
-              marginBottom: 6,
-              textAlign: 'center',
-            }}>
-              {mode.label}
-              <div style={{ fontSize: 10, fontWeight: 400, color: '#999' }}>{mode.labelCN}</div>
-            </div>
-
-            {/* 两个角度选项 */}
-            <div style={{ display: 'flex', gap: 4 }}>
-              {mode.rotations.map((rot) => {
-                const isChecked = isSelected; // 该模式下都选中
-                return (
-                  <div
-                    key={rot.angle}
-                    onClick={() => handleSelect(mode.key)}
-                    style={{
-                      cursor: 'pointer',
-                      padding: 4,
-                      borderRadius: 4,
-                      border: isSelected ? '2px solid #1677ff' : '1px solid #d9d9d9',
-                      background: isSelected ? '#f0f5ff' : '#fff',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <BlueCube3D
-                      dx={rot.dims(item.length, item.width, item.height).dx}
-                      dy={rot.dims(item.length, item.width, item.height).dy}
-                      dz={rot.dims(item.length, item.width, item.height).dz}
-                      checked={isChecked}
-                    />
-                    {/* 角度标签 */}
-                    <div style={{
-                      textAlign: 'center',
-                      fontSize: 10,
-                      color: isSelected ? '#1677ff' : '#999',
-                      fontWeight: isSelected ? 600 : 400,
-                      marginTop: 2,
-                    }}>
-                      {rot.label}
-                    </div>
-                    {/* 复选框 */}
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      marginTop: 2,
-                    }}>
-                      <svg width="14" height="14" viewBox="0 0 16 16">
-                        <rect
-                          x="0.5" y="0.5" width="15" height="15"
-                          rx="3"
-                          fill={isChecked ? '#1677ff' : '#fff'}
-                          stroke={isChecked ? '#1677ff' : '#d9d9d9'}
-                          strokeWidth="1.2"
-                        />
-                        {isChecked && (
-                          <path
-                            d="M4 8 L7 11 L12 5"
-                            fill="none"
-                            stroke="#fff"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        )}
-                      </svg>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div key={mode.key} onClick={() => toggleMode(mode.forbid)} style={{
+            cursor: 'pointer', padding: '4px 6px', borderRadius: 6,
+            border: disabled ? '2px solid #ff4d4f' : '2px solid #1677ff',
+            background: disabled ? '#fff2f0' : '#f0f5ff',
+            opacity: disabled ? 0.65 : 1, userSelect: 'none',
+          }}>
+            <IsoCube3D dx={dx} dy={dy} dz={dz} checked={!disabled} />
           </div>
         );
       })}
@@ -236,7 +143,7 @@ export default function ItemListEditor({ value, onChange }: ItemListEditorProps)
       quantity: 1,
       is_fragile: false,
       batch_number: 0,
-      forbidden_horizontal_dim: null,
+      forbidden_horizontal_dims: [],
     };
     onChange([...value, newItem]);
   };
