@@ -4,7 +4,12 @@ from typing import List, Tuple, Optional
 Orientation definitions (沿X, 沿Y, 沿Z):
   Orientation 1 (height_vertical):  (L, H, W) - height is vertical, base is L×W
   Orientation 2 (width_vertical):   (L, W, H) - width is vertical, base is L×H
-  Orientation 3 (length_vertical):  (W, L, H) - length is vertical, base is W×H
+  Orientation 3 (length_vertical):  (W, H, L) - length is vertical, base is W×H
+  
+  Note: (rot_l, rot_h, rot_w) where:
+    - rot_l: dimension along X-axis (length direction)
+    - rot_h: dimension along Y-axis (height/vertical direction)
+    - rot_w: dimension along Z-axis (width direction)
 """
 
 
@@ -35,9 +40,9 @@ def get_allowed_orientations(
     Returns list of (dimensions_tuple, rotation_label, orientation_name).
     """
     all_orientations = [
-        ((length, width, height), "lwh", "height_vertical"),
-        ((length, height, width), "lhw", "width_vertical"),
-        ((width, length, height), "wlh", "length_vertical"),
+        ((length, width, height), "lwh", "height_vertical"),    # height垂直，底面L×W
+        ((length, height, width), "lhw", "width_vertical"),     # width垂直，底面L×H
+        ((width, height, length), "whl", "length_vertical"),    # length垂直，底面W×H
     ]
 
     if forbidden_horizontal_dim is None:

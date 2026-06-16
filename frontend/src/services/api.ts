@@ -21,12 +21,14 @@ export async function optimizePhase2(
     enable_ga?: boolean;
     enable_ls?: boolean;
     enable_pareto?: boolean;
+    timeout_seconds?: number;
   }
 ): Promise<MultiOptimizeResponse> {
   const params = new URLSearchParams();
   if (options?.enable_ga !== undefined) params.set('enable_ga', String(options.enable_ga));
   if (options?.enable_ls !== undefined) params.set('enable_ls', String(options.enable_ls));
   if (options?.enable_pareto !== undefined) params.set('enable_pareto', String(options.enable_pareto));
+  if (options?.timeout_seconds !== undefined) params.set('timeout_seconds', String(options.timeout_seconds));
 
   const url = `${API_BASE}/optimize-phase2${params.toString() ? '?' + params.toString() : ''}`;
   const response = await fetch(url, {

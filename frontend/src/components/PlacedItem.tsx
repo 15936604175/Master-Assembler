@@ -10,19 +10,34 @@ interface PlacedItemProps {
   dimmed?: boolean;
   hidden?: boolean;
   onClick?: (placement: Placement) => void;
+  itemIndex?: number; // 商品序号（同类商品的第几个）
 }
 
-export default function PlacedItem({ placement, color, selected, dimmed, hidden, onClick }: PlacedItemProps) {
+export default function PlacedItem({ 
+  placement, 
+  color, 
+  selected, 
+  dimmed, 
+  hidden, 
+  onClick,
+  itemIndex 
+}: PlacedItemProps) {
   const [hovered, setHovered] = useState(false);
 
   if (hidden) return null;
 
-  const opacity = selected ? 1.0 : dimmed ? 0.15 : 0.85;
+  const opacity = selected ? 1.0 : dimmed ? 0.3 : hovered ? 0.95 : 0.85;
   const emissive = selected ? new THREE.Color(color) : new THREE.Color('#000000');
-  const emissiveIntensity = selected ? 0.3 : 0;
+  const emissiveIntensity = selected ? 0.4 : 0;
+
+  // 计算商品序号标签
+  const label = itemIndex !== undefined 
+    ? `${placement.item_id} #${itemIndex + 1}` 
+    : placement.item_id;
 
   return (
     <group>
+      {/* 实体盒子 */}
       <Box
         position={[
           placement.x + placement.length / 2,
@@ -30,9 +45,19 @@ export default function PlacedItem({ placement, color, selected, dimmed, hidden,
           placement.z + placement.width / 2,
         ]}
         args={[placement.length, placement.height, placement.width]}
-        onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'pointer'; }}
-        onPointerOut={() => { setHovered(false); document.body.style.cursor = 'auto'; }}
-        onClick={(e) => { e.stopPropagation(); onClick?.(placement); }}
+        onPointerOver={(e) => { 
+          e.stopPropagation(); 
+          setHovered(true); 
+          document.body.style.cursor = 'pointer'; 
+        }}
+        onPointerOut={() => { 
+          setHovered(false); 
+          document.body.style.cursor = 'auto'; 
+        }}
+        onClick={(e) => { 
+          e.stopPropagation(); 
+          onClick?.(placement); 
+        }}
       >
         <meshStandardMaterial
           color={color}
@@ -40,36 +65,68 @@ export default function PlacedItem({ placement, color, selected, dimmed, hidden,
           transparent
           emissive={emissive}
           emissiveIntensity={emissiveIntensity}
+          depthWrite={true}
+          depthTest={true}
+          side={THREE.FrontSide}
+          roughness={0.4}
+          metalness={0.1}
         />
       </Box>
-      <Box
+      
+      {/* 线框（仅在选中或悬停时显示） */}
+      {(selected || hovered) && (
+        <Box
+          position={[
+            placement.x + placement.length / 2,
+            placement.y + placement.height / 2,
+            placement.z + placement.width / 2,
+          ]}
+          args={[placement.length, placement.height, placement.width]}
+        >
+          <meshBasicMaterial
+            color={selected ? '#ff0000' : '#000000'}
+            wireframe
+            transparent
+            opacity={selected ? 0.9 : 0.5}
+            depthWrite={false}
+            depthTest={true}
+          />
+        </Box>
+      )}
+      
+      {/* 商品标签（始终显示） */}
+      <Text
         position={[
           placement.x + placement.length / 2,
-          placement.y + placement.height / 2,
+          placement.y + placement.height + 20,
           placement.z + placement.width / 2,
         ]}
-        args={[placement.length, placement.height, placement.width]}
+        fontSize={15}
+        color={selected ? '#ff0000' : '#333333'}
+        outlineWidth={0.5}
+        outlineColor="#ffffff"
+        anchorX="center"
+        anchorY="bottom"
       >
-        <meshBasicMaterial
-          color={selected ? '#ff0000' : '#000000'}
-          wireframe
-          transparent
-          opacity={selected ? 0.8 : hovered ? 0.4 : 0.08}
-        />
-      </Box>
+        {label}
+      </Text>
+      
+      {/* 选中时显示详细信息 */}
       {selected && (
         <Text
           position={[
             placement.x + placement.length / 2,
-            placement.y + placement.height + 30,
+            placement.y + placement.height + 50,
             placement.z + placement.width / 2,
           ]}
-          fontSize={25}
+          fontSize={12}
           color="#ff0000"
-          outlineWidth={0.1}
+          outlineWidth={0.3}
           outlineColor="#ffffff"
+          anchorX="center"
+          anchorY="bottom"
         >
-          {`${placement.item_id} (${Math.round(placement.x)},${Math.round(placement.y)},${Math.round(placement.z)})`}
+          {`位置: (${Math.round(placement.x)}, ${Math.round(placement.y)}, ${Math.round(placement.z)})`}
         </Text>
       )}
     </group>

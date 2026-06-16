@@ -46,10 +46,14 @@ export default function ControlPanel({ onResult, onMultiResult, onLoading }: Con
     try {
       const inputItems = buildItems();
       if (algorithm === 'phase2') {
-        const result = await optimizePhase2({ container, items: inputItems });
+        message.info('Phase 2 优化预计需要 30-60 秒，请耐心等待...');
+        const result = await optimizePhase2(
+          { container, items: inputItems },
+          { timeout_seconds: 60 }
+        );
         onMultiResult?.(result);
         onResult(result.primary);
-        message.success(`优化完成 (${result.pareto_count} 个帕累托方案)`);
+        message.success(`优化完成 (${result.pareto_count} 个帕累托方案，耗时 ${result.algorithm_time_ms}ms)`);
       } else {
         const result = await optimize({ container, items: inputItems });
         onResult(result);

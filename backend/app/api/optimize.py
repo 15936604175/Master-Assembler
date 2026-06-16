@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List, Dict
+import time
+import logging
 from app.models.solution import OptimizeRequest, OptimizeResponse, MultiOptimizeResponse, Placement, UnplacedItem, CGPoint, Stats
 from app.models.container import ContainerConfig
 from app.engine.packer import EPacker
@@ -7,6 +9,7 @@ from app.validators.item_validator import validate_request
 from app.engine.feasibility import FeasibilityVerifier
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _build_response(result, solution_type: str, container: ContainerConfig,
@@ -141,6 +144,7 @@ async def optimize_phase2(
     enable_ga: bool = Query(True, description="启用遗传算法优化"),
     enable_ls: bool = Query(True, description="启用局部搜索优化"),
     enable_pareto: bool = Query(True, description="启用帕累托优化"),
+    timeout_seconds: int = Query(60, description="超时时间（秒）"),
 ):
     """
     Phase 2 多算法优化接口。
@@ -155,66 +159,100 @@ async def optimize_phase2(
                 detail={"message": "输入数据验证失败", "errors": errors},
             )
 
-        import time
         total_start = time.time()
+        logger.info(f"开始 Phase 2 优化，物品数量: {len(request.items)}, 超时: {timeout_seconds}s")
 
         # 1. Greedy (baseline)
+        logger.info("运行贪心算法...")
         packer = EPacker()
         greedy_result = packer.pack(request.container, request.items)
         greedy_response = _build_response(
             greedy_result, "greedy", request.container, request.items, 0
         )
+        logger.info(f"贪心算法完成，利用率: {greedy_response.container_utilization:.2%}")
+
+        # Check timeout
+        elapsed = time.time() - total_start
+        if elapsed > timeout_seconds:
+            logger.warning(f"超时 ({elapsed:.1f}s > {timeout_seconds}s)，跳过后续优化")
+            return MultiOptimizeResponse(
+                success=True,
+                primary=greedy_response,
+                ga_solution=None,
+                ls_solution=None,
+                pareto_solutions=None,
+                algorithm_time_ms=round(elapsed * 1000, 2),
+                pareto_count=0,
+            )
 
         # 2. Genetic Algorithm
         ga_response = None
         if enable_ga:
-            from app.engine.genetic_algorithm import GeneticOptimizer, GAConfig
-            ga = GeneticOptimizer(request.container, request.items, GAConfig(
-                population_size=60, generations=80, elite_count=5
-            ))
-            ga_placements, _, _ = ga.run()
-            if ga_placements:
-                ga_response = _build_response_from_dicts(
-                    request.container, request.items, ga_placements, "ga", 0
-                )
+            elapsed = time.time() - total_start
+            if elapsed > timeout_seconds:
+                logger.warning("超时，跳过遗传算法")
+            else:
+                logger.info("运行遗传算法...")
+                from app.engine.genetic_algorithm import GeneticOptimizer, GAConfig
+                ga = GeneticOptimizer(request.container, request.items, GAConfig(
+                    population_size=20, generations=30, elite_count=3
+                ))
+                ga_placements, _, _ = ga.run()
+                if ga_placements:
+                    ga_response = _build_response_from_dicts(
+                        request.container, request.items, ga_placements, "ga", 0
+                    )
+                    logger.info(f"遗传算法完成，利用率: {ga_response.container_utilization:.2%}")
 
         # 3. Local Search
         ls_response = None
         if enable_ls:
-            from app.engine.local_search import LocalSearchOptimizer, LSConfig
+            elapsed = time.time() - total_start
+            if elapsed > timeout_seconds:
+                logger.warning("超时，跳过局部搜索")
+            else:
+                logger.info("运行局部搜索...")
+                from app.engine.local_search import LocalSearchOptimizer, LSConfig
 
-            seed = ga.best_chromosome if (enable_ga and hasattr(ga, 'best_chromosome') and ga.best_chromosome) else None
+                seed = ga.best_chromosome if (enable_ga and hasattr(ga, 'best_chromosome') and ga.best_chromosome) else None
 
-            ls = LocalSearchOptimizer(request.container, request.items, seed, LSConfig(
-                max_iterations=500, no_improve_limit=30, strategy="best"
-            ))
-            ls_result = ls.run()
+                ls = LocalSearchOptimizer(request.container, request.items, seed, LSConfig(
+                    max_iterations=100, no_improve_limit=20, strategy="best"
+                ))
+                ls_result = ls.run()
 
-            if ls_result.placements:
-                ls_response = _build_response_from_dicts(
-                    request.container, request.items, ls_result.placements,
-                    "ls", ls_result.iterations_run
-                )
+                if ls_result.placements:
+                    ls_response = _build_response_from_dicts(
+                        request.container, request.items, ls_result.placements,
+                        "ls", ls_result.iterations_run
+                    )
+                    logger.info(f"局部搜索完成，利用率: {ls_response.container_utilization:.2%}")
 
         # 4. Pareto (NSGA-II)
         pareto_responses: list = []
         pareto_count = 0
         if enable_pareto:
-            from app.engine.pareto_optimizer import NSGAOptimizer, NSGAConfig
-            nsga = NSGAOptimizer(request.container, request.items, NSGAConfig(
-                population_size=50, generations=60, elite_count=8
-            ))
-            pareto_result = nsga.run()
-            pareto_count = len(pareto_result.pareto_front)
+            elapsed = time.time() - total_start
+            if elapsed > timeout_seconds:
+                logger.warning("超时，跳过帕累托优化")
+            else:
+                logger.info("运行帕累托优化...")
+                from app.engine.pareto_optimizer import NSGAOptimizer, NSGAConfig
+                nsga = NSGAOptimizer(request.container, request.items, NSGAConfig(
+                    population_size=20, generations=25, elite_count=3
+                ))
+                pareto_result = nsga.run()
+                pareto_count = len(pareto_result.pareto_front)
+                logger.info(f"帕累托优化完成，找到 {pareto_count} 个方案")
 
-            for ind in pareto_result.pareto_front[:8]:
-                if not ind.placements:
-                    continue
-                resp = _build_response_from_dicts(
-                    request.container, request.items, ind.placements, "pareto", 0
-                )
-                if resp:
-                    pareto_responses.append(resp)
+                for ind in pareto_result.pareto_front[:8]:
+                    if not ind.placements:
+                        continue
+                    resp = _build_response_from_dicts(
+                        request.container, request.items, ind.placements, "pareto", 0
+                    )
+                    if resp:
+                        pareto_responses.append(resp)
 
         total_elapsed = (time.time() - total_start) * 1000
 

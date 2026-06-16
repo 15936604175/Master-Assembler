@@ -100,6 +100,21 @@ function SceneInner({
     return colorMap;
   }, [result]);
 
+  // 计算每个商品的序号（同类商品的第几个）
+  const itemIndices = useMemo(() => {
+    if (!result) return new Map<number, number>();
+    const indices = new Map<number, number>();
+    const counters = new Map<string, number>();
+    
+    result.placements.forEach((p, i) => {
+      const currentCount = counters.get(p.item_id) || 0;
+      counters.set(p.item_id, currentCount + 1);
+      indices.set(i, currentCount);
+    });
+    
+    return indices;
+  }, [result]);
+
   const handleClick = useCallback(
     (placement: Placement) => {
       onSelect(placement.item_id === selectedId ? null : placement.item_id);
@@ -114,6 +129,10 @@ function SceneInner({
         position={[container.length * 0.5, container.height * 1.5, container.width * 0.5]}
         intensity={0.8}
       />
+      <directionalLight
+        position={[container.length * 0.5, container.height * 0.5, container.width * 0.5]}
+        intensity={0.4}
+      />
       <ContainerMesh length={container.length} width={container.width} height={container.height} />
       {result?.placements.map((p, i) => (
         <PlacedItem
@@ -124,6 +143,7 @@ function SceneInner({
           dimmed={selectedId !== null && selectedId !== p.item_id}
           hidden={hiddenIds.has(p.item_id)}
           onClick={handleClick}
+          itemIndex={itemIndices.get(i)}
         />
       ))}
       <Grid
@@ -139,6 +159,9 @@ function SceneInner({
       <OrbitControls
         makeDefault
         target={[container.length / 2, container.height / 2, container.width / 2]}
+        enableDamping={true}
+        dampingFactor={0.05}
+        rotateSpeed={0.8}
       />
       <CameraAnimator target={cameraTarget} onArrived={onCameraArrived} />
     </>
@@ -193,9 +216,15 @@ export default function Layout3D({ result, container }: Layout3DProps) {
         camera={{
           position: [camDist * 0.7, camDist * 0.6, camDist * 0.7],
           fov: 45,
-          near: 1,
-          far: camDist * 5,
+          near: 10,
+          far: camDist * 10,
         }}
+        gl={{ 
+          antialias: true,
+          alpha: false,
+          powerPreference: 'high-performance',
+        }}
+        shadows
       >
         <Suspense fallback={null}>
           <SceneInner
