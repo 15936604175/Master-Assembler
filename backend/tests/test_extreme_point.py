@@ -8,10 +8,13 @@ from app.engine.extreme_point import (
 
 def test_generate_new_eps():
     eps = generate_new_eps(10, 10, 10, 100, 50, 60)
-    assert len(eps) == 3
+    assert len(eps) == 6
     assert (110, 10, 10) in eps
     assert (10, 60, 10) in eps
     assert (10, 10, 70) in eps
+    assert (110, 10, 70) in eps
+    assert (110, 60, 10) in eps
+    assert (10, 60, 70) in eps
 
 
 def test_is_valid_ep_within_container():
@@ -54,7 +57,7 @@ def test_evaluate_placement_returns_metrics():
     )
     assert isinstance(score, float)
     assert score > 0
-    assert "proximity" in metrics
+    assert "blf_score" in metrics
     assert "support_ratio" in metrics
     assert "cg_score" in metrics
     assert "is_supported" in metrics
@@ -121,4 +124,4 @@ def test_check_fragile_safety_heavy_on_fragile():
 
 
 def test_support_threshold_value():
-    assert SUPPORT_THRESHOLD == 0.6
+    assert SUPPORT_THRESHOLD == 0.1

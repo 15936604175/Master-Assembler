@@ -22,21 +22,36 @@ def cut_space(space: Space, item_box: tuple) -> List[Space]:
 
     result = []
 
-    # Space along X axis
+    if ix > space.x:
+        result.append(Space(
+            space.x, space.y, space.z,
+            ix - space.x, space.h, space.w
+        ))
+
     if space.x + space.l > ix + il:
         result.append(Space(
             ix + il, space.y, space.z,
             space.x + space.l - (ix + il), space.h, space.w
         ))
 
-    # Space along Y axis
+    if iy > space.y:
+        result.append(Space(
+            space.x, space.y, space.z,
+            space.l, iy - space.y, space.w
+        ))
+
     if space.y + space.h > iy + ih:
         result.append(Space(
             space.x, iy + ih, space.z,
             space.l, space.y + space.h - (iy + ih), space.w
         ))
 
-    # Space along Z axis
+    if iz > space.z:
+        result.append(Space(
+            space.x, space.y, space.z,
+            space.l, space.h, iz - space.z
+        ))
+
     if space.z + space.w > iz + iw:
         result.append(Space(
             space.x, space.y, iz + iw,

@@ -23,7 +23,6 @@ def test_cut_space_no_intersection():
 
 
 def test_cut_space_item_contained():
-    """Item inside but not at origin - should still produce 3 spaces"""
     original = Space(0, 0, 0, 200, 200, 200)
     item_box = (50, 50, 50, 100, 100, 100)
     result = cut_space(original, item_box)

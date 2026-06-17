@@ -12,6 +12,9 @@ def generate_new_eps(x: float, y: float, z: float,
         (x + item_l, y, z),
         (x, y + item_h, z),
         (x, y, z + item_w),
+        (x + item_l, y, z + item_w),
+        (x + item_l, y + item_h, z),
+        (x, y + item_h, z + item_w),
     ]
 
 
@@ -160,12 +163,10 @@ def evaluate_placement(ep: ExtremePoint, item_size: Tuple[float, float, float],
             ex, ey, ez, il, ih, iw, weight, existing_placements
         )
 
-    w1, w2, w3, w4, w5 = 0.10, 0.15, 0.05, 0.05, 0.05
+    w1, w2, w3, w4, w5 = 0.20, 0.20, 0.10, 0.10, 0.05
 
-    center_x, center_y, center_z = cl / 2, ch / 2, cw / 2
-    max_dist = ((cl / 2) ** 2 + (ch / 2) ** 2 + (cw / 2) ** 2) ** 0.5
-    dist = ((ex - center_x) ** 2 + (ey - center_y) ** 2 + (ez - center_z) ** 2) ** 0.5
-    proximity = 1.0 - (dist / max_dist) if max_dist > 0 else 1.0
+    blf_score = 1.0 - (ey / ch * 0.5 + ex / cl * 0.3 + ez / cw * 0.2) if cl > 0 and ch > 0 and cw > 0 else 1.0
+    blf_score = max(0.0, min(1.0, blf_score))
 
     gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
 
@@ -194,15 +195,15 @@ def evaluate_placement(ep: ExtremePoint, item_size: Tuple[float, float, float],
         if item_footprint > 0:
             adj_score = min(contact_area / item_footprint, 1.0)
 
-    total_score = (w1 * proximity
+    total_score = (w1 * blf_score
                    + w2 * support_ratio
                    + w3 * cg_score
                    + w4 * gravity_score
                    + w5 * fragile_safe
-                   + 0.60 * adj_score)
+                   + 0.35 * adj_score)
 
     metrics = {
-        "proximity": round(proximity, 4),
+        "blf_score": round(blf_score, 4),
         "support_ratio": support_ratio,
         "cg_score": cg_score,
         "gravity_score": round(gravity_score, 4),
@@ -237,16 +238,14 @@ def evaluate_placement_fast(ep: ExtremePoint, item_size: Tuple[float, float, flo
             ex, ey, ez, il, ih, iw, weight, existing_placements
         )
 
-    center_x, center_y, center_z = cl / 2, ch / 2, cw / 2
-    max_dist = ((cl / 2) ** 2 + (ch / 2) ** 2 + (cw / 2) ** 2) ** 0.5
-    dist = ((ex - center_x) ** 2 + (ey - center_y) ** 2 + (ez - center_z) ** 2) ** 0.5
-    proximity = 1.0 - (dist / max_dist) if max_dist > 0 else 1.0
+    blf_score = 1.0 - (ey / ch * 0.5 + ex / cl * 0.3 + ez / cw * 0.2) if cl > 0 and ch > 0 and cw > 0 else 1.0
+    blf_score = max(0.0, min(1.0, blf_score))
 
     gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
 
-    total_score = (0.25 * proximity
+    total_score = (0.30 * blf_score
                    + 0.25 * support_ratio
-                   + 0.20 * cg_score
+                   + 0.15 * cg_score
                    + 0.15 * gravity_score
                    + 0.15 * fragile_safe)
 

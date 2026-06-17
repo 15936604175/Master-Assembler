@@ -12,15 +12,15 @@ from app.engine.extreme_point import (
 )
 from app.engine.space_cutter import Space, cut_space, remove_degenerate_spaces
 
-MAX_EP_COUNT = 300
-FAST_EP_COUNT = 60
+MAX_EP_COUNT = 600
+FAST_EP_COUNT = 120
 
 
 def _generate_floor_eps(cl: float, ch: float, cw: float,
                         grid_step: float = 300.0) -> List[Tuple[float, float, float]]:
     eps = [(0.0, 0.0, 0.0)]
-    step_x = max(grid_step, cl / 15)
-    step_z = max(grid_step, cw / 15)
+    step_x = max(grid_step, cl / 20)
+    step_z = max(grid_step, cw / 20)
     x = step_x
     while x < cl:
         z = step_z
@@ -28,7 +28,6 @@ def _generate_floor_eps(cl: float, ch: float, cw: float,
             eps.append((x, 0.0, z))
             z += step_z
         x += step_x
-    eps.append((cl / 2, 0.0, cw / 2))
     return eps
 
 
@@ -39,12 +38,14 @@ def _prune_eps(eps: List[Tuple[float, float, float]],
         return eps
     floor_eps = [ep for ep in eps if ep[1] <= 1.0]
     non_floor_eps = [ep for ep in eps if ep[1] > 1.0]
+    non_floor_eps.sort(key=lambda ep: (ep[1], ep[0], ep[2]))
     remaining = max_count - len(floor_eps)
     if remaining <= 0:
         return floor_eps[:max_count]
     if len(non_floor_eps) <= remaining:
         return floor_eps + non_floor_eps
-    kept_non_floor = non_floor_eps[-remaining:]
+    step = max(1, len(non_floor_eps) // remaining)
+    kept_non_floor = non_floor_eps[::step][:remaining]
     return floor_eps + kept_non_floor
 
 
