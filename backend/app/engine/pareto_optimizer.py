@@ -59,7 +59,7 @@ class NSGAOptimizer(OptimizerBase):
         self.config = config or NSGAConfig()
 
     def _evaluate_solution(self, chromosome: List[int]) -> Optional[NSGASolution]:
-        placements = self._decode(chromosome)
+        placements, _ = self._decode(chromosome)
         if not placements:
             return None
 
@@ -165,49 +165,49 @@ class NSGAOptimizer(OptimizerBase):
             best = better(best, c)
         return best.chromosome[:]
 
-    def _uniform_crossover(self, p1: List[int], p2: List[int]) -> List[int]:
-        """Uniform crossover for rotation-index chromosomes."""
+    def _order_crossover(self, p1: List[int], p2: List[int]) -> List[int]:
+        """Order crossover (OX) for permutation chromosomes."""
         size = len(p1)
-        if size < 1:
+        if size < 2:
             return p1[:]
-        child = p1[:]
+        a, b = sorted(random.sample(range(size), 2))
+        child = [None] * size
+        child[a:b + 1] = p1[a:b + 1]
+        seg = set(child[a:b + 1])
+        fill = [x for x in p2 if x not in seg]
+        idx = 0
         for i in range(size):
-            if random.random() < 0.5:
-                child[i] = p2[i]
+            if child[i] is None:
+                child[i] = fill[idx]
+                idx += 1
         return child
 
     def _mutate(self, chromosome: List[int]) -> List[int]:
         chrom = chromosome[:]
         if not chrom:
             return chrom
-        mut_type = random.choice(["swap", "rotate", "insert"])
+        mut_type = random.choice(["swap", "insert", "reverse"])
         if mut_type == "swap" and len(chrom) >= 2:
             i, j = random.sample(range(len(chrom)), 2)
             chrom[i], chrom[j] = chrom[j], chrom[i]
-        elif mut_type == "rotate":
-            idx = random.randint(0, len(chrom) - 1)
-            allowed = self.allowed_rotations[idx]
-            if len(allowed) > 1:
-                current = chrom[idx]
-                other = [r for r in allowed if r != current]
-                if other:
-                    chrom[idx] = random.choice(other)
         elif mut_type == "insert" and len(chrom) >= 2:
             i = random.randint(0, len(chrom) - 1)
             gene = chrom.pop(i)
             j = random.randint(0, len(chrom))
             chrom.insert(j, gene)
+        elif mut_type == "reverse" and len(chrom) >= 2:
+            i, j = sorted(random.sample(range(len(chrom)), 2))
+            chrom[i:j + 1] = reversed(chrom[i:j + 1])
         return chrom
 
     def run(self) -> NSGAResult:
         if self.n == 0:
             return NSGAResult([], [], 0)
 
-        n_to_use = min(self.n, 200)
-        greedy = self._greedy_chromosome()[:n_to_use]
+        greedy = self._greedy_chromosome()
         initial_chromosomes: List[List[int]] = [greedy]
         for _ in range(self.config.population_size - 1):
-            initial_chromosomes.append(self._random_chromosome()[:n_to_use])
+            initial_chromosomes.append(self._random_chromosome())
 
         population: List[NSGASolution] = []
         for chrom in initial_chromosomes:
@@ -220,6 +220,7 @@ class NSGAOptimizer(OptimizerBase):
 
         best_per_gen: List[List[NSGASolution]] = []
 
+        gen = 0
         for gen in range(self.config.generations):
             fronts = self._non_dominated_sort(population)
             for rank, front in enumerate(fronts):
@@ -247,8 +248,8 @@ class NSGAOptimizer(OptimizerBase):
                 p1_chrom = self._tournament_select(pool)
                 p2_chrom = self._tournament_select(pool)
                 if random.random() < self.config.crossover_rate:
-                    child1 = self._uniform_crossover(p1_chrom, p2_chrom)
-                    child2 = self._uniform_crossover(p2_chrom, p1_chrom)
+                    child1 = self._order_crossover(p1_chrom, p2_chrom)
+                    child2 = self._order_crossover(p2_chrom, p1_chrom)
                 else:
                     child1, child2 = p1_chrom[:], p2_chrom[:]
                 if random.random() < self.config.mutation_rate:

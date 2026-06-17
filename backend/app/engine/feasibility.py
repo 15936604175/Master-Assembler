@@ -290,10 +290,15 @@ class FeasibilityVerifier:
         if not placements:
             return (0.0, 0.0, 0.0)
         total_w = sum(p.get("weight", 0) for p in placements)
-        if total_w <= 0:
-            return (0.0, 0.0, 0.0)
-
-        cx = sum(p["weight"] * (p["x"] + p["l"] / 2) for p in placements) / total_w
-        cy = sum(p["weight"] * (p["y"] + p["h"] / 2) for p in placements) / total_w
-        cz = sum(p["weight"] * (p["z"] + p["w"] / 2) for p in placements) / total_w
-        return (cx, cy, cz)
+        if total_w > 0:
+            cx = sum(p["weight"] * (p["x"] + p["l"] / 2) for p in placements) / total_w
+            cy = sum(p["weight"] * (p["y"] + p["h"] / 2) for p in placements) / total_w
+            cz = sum(p["weight"] * (p["z"] + p["w"] / 2) for p in placements) / total_w
+            return (cx, cy, cz)
+        total_vol = sum(p["l"] * p["h"] * p["w"] for p in placements)
+        if total_vol > 0:
+            cx = sum(p["l"] * p["h"] * p["w"] * (p["x"] + p["l"] / 2) for p in placements) / total_vol
+            cy = sum(p["l"] * p["h"] * p["w"] * (p["y"] + p["h"] / 2) for p in placements) / total_vol
+            cz = sum(p["l"] * p["h"] * p["w"] * (p["z"] + p["w"] / 2) for p in placements) / total_vol
+            return (cx, cy, cz)
+        return (0.0, 0.0, 0.0)

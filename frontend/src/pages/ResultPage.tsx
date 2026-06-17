@@ -1,5 +1,5 @@
 import { useState, Suspense } from 'react';
-import { Button, Card, Typography, Space, Tag, Tooltip } from 'antd';
+import { Button, Card, Typography, Space, Tag, Tooltip, Checkbox } from 'antd';
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
@@ -7,6 +7,7 @@ import {
   ClockCircleOutlined,
   InboxOutlined,
   AppstoreOutlined,
+  TagOutlined,
 } from '@ant-design/icons';
 import Layout3D from '../components/Layout3D';
 import ResultPanel from '../components/ResultPanel';
@@ -23,6 +24,7 @@ interface ResultPageProps {
 
 export default function ResultPage({ result, multiResult, container, onBack }: ResultPageProps) {
   const [selectedResult, setSelectedResult] = useState<OptimizeResponse>(result);
+  const [showLabels, setShowLabels] = useState(false);
 
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(selectedResult, null, 2)], { type: 'application/json' });
@@ -104,6 +106,14 @@ export default function ResultPage({ result, multiResult, container, onBack }: R
           <Tag color="blue" style={{ margin: 0 }}>
             方案: {selectedResult.solution_type || 'greedy'}
           </Tag>
+          <Checkbox
+            checked={showLabels}
+            onChange={(e) => setShowLabels(e.target.checked)}
+            style={{ fontSize: 13 }}
+          >
+            <TagOutlined style={{ marginRight: 2 }} />
+            显示标签
+          </Checkbox>
           <Tooltip title="导出 JSON 结果">
             <Button
               icon={<DownloadOutlined />}
@@ -161,7 +171,7 @@ export default function ResultPage({ result, multiResult, container, onBack }: R
           styles={{ body: { padding: 0, height: '100%' } }}
         >
           <Suspense fallback={<div style={{ padding: 20, color: '#64748b' }}>加载 3D 场景...</div>}>
-            <Layout3D result={selectedResult} container={container} />
+            <Layout3D result={selectedResult} container={container} showLabels={showLabels} />
           </Suspense>
         </Card>
       </div>

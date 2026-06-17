@@ -10,6 +10,7 @@ import type { Placement, OptimizeResponse, ContainerConfig } from '../types';
 interface Layout3DProps {
   result: OptimizeResponse | null;
   container: ContainerConfig;
+  showLabels?: boolean;
 }
 
 interface CameraAnimatorProps {
@@ -80,6 +81,7 @@ interface SceneInnerProps {
   cameraTarget: ViewPreset | null;
   onCameraArrived: () => void;
   distanceFactor: number;
+  showLabels: boolean;
 }
 
 function SceneInner({
@@ -92,6 +94,7 @@ function SceneInner({
   cameraTarget,
   onCameraArrived,
   distanceFactor,
+  showLabels,
 }: SceneInnerProps) {
   const itemColors = useMemo(() => {
     const colorMap: Record<string, string> = {};
@@ -155,7 +158,7 @@ function SceneInner({
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           itemIndex={itemIndices.get(i)}
-          labelVisible={selectedId !== null && selectedId === p.item_id}
+          labelVisible={showLabels || (selectedId !== null && selectedId === p.item_id)}
           distanceFactor={distanceFactor}
         />
       ))}
@@ -181,7 +184,7 @@ function SceneInner({
   );
 }
 
-export default function Layout3D({ result, container }: Layout3DProps) {
+export default function Layout3D({ result, container, showLabels = false }: Layout3DProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [cameraTarget, setCameraTarget] = useState<ViewPreset | null>(null);
@@ -338,6 +341,7 @@ export default function Layout3D({ result, container }: Layout3DProps) {
               cameraTarget={cameraTarget}
               onCameraArrived={handleCameraArrived}
               distanceFactor={maxDim * 0.8}
+              showLabels={showLabels}
             />
           </Suspense>
         </Canvas>

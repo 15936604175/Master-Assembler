@@ -4,8 +4,9 @@ Local Search Optimization Module with Simulated Annealing
 Takes a seed chromosome (from GA or greedy) and performs iterative
 local search using:
 - Item order swap
-- Item rotation change
+- Item order insert
 - Block move operations
+- Segment reversal (2-opt)
 
 Combined with simulated annealing to escape local optima.
 """
@@ -22,8 +23,8 @@ from app.engine.optimizer_base import OptimizerBase
 
 @dataclass
 class LSConfig:
-    max_iterations: int = 1000
-    no_improve_limit: int = 50
+    max_iterations: int = 200
+    no_improve_limit: int = 30
     initial_temp: float = 1.0
     cooling_rate: float = 0.995
     strategy: str = "best"
@@ -48,17 +49,19 @@ class LocalSearchOptimizer(OptimizerBase):
                  seed_chromosome: Optional[List[int]] = None,
                  config: Optional[LSConfig] = None):
         super().__init__(container, items)
+        if isinstance(seed_chromosome, LSConfig):
+            config = seed_chromosome
+            seed_chromosome = None
         self.config = config or LSConfig()
-        self.seed = seed_chromosome or self._greedy_chromosome()
+        self.seed = seed_chromosome if seed_chromosome is not None else self._greedy_chromosome()
 
     def _evaluate(self, chromosome: List[int]) -> Tuple[float, Optional[LSResult]]:
-        placements = self._decode(chromosome)
+        placements, _ = self._decode(chromosome)
         if not placements:
             return -999.0, None
 
         utilization, stability, cg_balance = self.evaluate_objectives(placements)
         score = self.score_placements(placements)
-        report = self.verifier.verify(placements)
 
         result = LSResult(
             placements=placements,
@@ -68,7 +71,7 @@ class LocalSearchOptimizer(OptimizerBase):
             score=score,
             iterations_run=0,
             temperature=self.config.initial_temp,
-            feasible=report.is_feasible,
+            feasible=True,
         )
         return score, result
 
@@ -78,20 +81,6 @@ class LocalSearchOptimizer(OptimizerBase):
             return chrom
         i, j = random.sample(range(len(chrom)), 2)
         chrom[i], chrom[j] = chrom[j], chrom[i]
-        return chrom
-
-    def _neighbor_rotate(self, chromosome: List[int]) -> List[int]:
-        chrom = chromosome[:]
-        if not chrom:
-            return chrom
-        idx = random.randint(0, len(chrom) - 1)
-        allowed = self.allowed_rotations[idx]
-        if len(allowed) <= 1:
-            return chrom
-        current = chrom[idx]
-        other = [r for r in allowed if r != current]
-        if other:
-            chrom[idx] = random.choice(other)
         return chrom
 
     def _neighbor_insert(self, chromosome: List[int]) -> List[int]:
@@ -116,27 +105,34 @@ class LocalSearchOptimizer(OptimizerBase):
         chrom[insert_pos:insert_pos] = block
         return chrom
 
+    def _neighbor_reverse(self, chromosome: List[int]) -> List[int]:
+        chrom = chromosome[:]
+        if len(chrom) < 2:
+            return chrom
+        i, j = sorted(random.sample(range(len(chrom)), 2))
+        chrom[i:j + 1] = reversed(chrom[i:j + 1])
+        return chrom
+
     def _random_neighbor(self, chromosome: List[int]) -> List[int]:
-        neighbor_type = random.choice(["swap", "rotate", "insert", "block"])
+        neighbor_type = random.choice(["swap", "insert", "block", "reverse"])
         if neighbor_type == "swap":
             return self._neighbor_swap(chromosome)
-        elif neighbor_type == "rotate":
-            return self._neighbor_rotate(chromosome)
         elif neighbor_type == "insert":
             return self._neighbor_insert(chromosome)
-        else:
+        elif neighbor_type == "block":
             return self._neighbor_block_move(chromosome)
+        else:
+            return self._neighbor_reverse(chromosome)
 
     def run(self) -> LSResult:
         if self.n == 0:
             return LSResult([], 0, 0, 0, 0, 0, 0, True)
 
-        n_to_use = min(self.n, 200)
-        current_chrom = self.seed[:n_to_use]
+        current_chrom = self.seed[:]
         current_score, current_result = self._evaluate(current_chrom)
 
         if current_result is None:
-            current_chrom = self._greedy_chromosome()[:n_to_use]
+            current_chrom = self._greedy_chromosome()
             current_score, current_result = self._evaluate(current_chrom)
 
         if current_result is None:
@@ -149,6 +145,7 @@ class LocalSearchOptimizer(OptimizerBase):
         temp = self.config.initial_temp
         no_improve = 0
 
+        i = 0
         for i in range(self.config.max_iterations):
             neighbor = self._random_neighbor(current_chrom)
             neighbor_score, neighbor_result = self._evaluate(neighbor)

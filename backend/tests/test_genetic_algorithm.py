@@ -26,28 +26,32 @@ def test_ga_initialization(container, items):
 
 def test_ga_config_defaults():
     config = GAConfig()
-    assert config.population_size == 80
-    assert config.generations == 150
-    assert config.elite_count == 5
+    assert config.population_size == 30
+    assert config.generations == 40
+    assert config.elite_count == 3
 
 
 def test_ga_chromosome_length(container, items):
     ga = GeneticOptimizer(container, items, GAConfig(population_size=10, generations=5))
     chrom = ga._greedy_chromosome()
     assert len(chrom) == ga.n
+    assert sorted(chrom) == list(range(ga.n))
 
 
 def test_ga_random_chromosome(container, items):
     ga = GeneticOptimizer(container, items)
     chrom = ga._random_chromosome()
     assert len(chrom) == ga.n
+    assert sorted(chrom) == list(range(ga.n))
 
 
 def test_ga_decode_returns_placements(container, items):
     ga = GeneticOptimizer(container, items)
     chrom = ga._random_chromosome()
-    placements = ga._decode(chrom)
+    placements, unplaced = ga._decode(chrom)
     assert isinstance(placements, list)
+    assert isinstance(unplaced, list)
+    assert len(placements) + len(unplaced) == ga.n
 
 
 def test_ga_evaluate(container, items):
@@ -85,14 +89,17 @@ def test_ga_crossover(container, items):
     c1, c2 = ga._order_crossover(p1, p2)
     assert len(c1) == len(p1)
     assert len(c2) == len(p2)
+    assert sorted(c1) == list(range(ga.n))
+    assert sorted(c2) == list(range(ga.n))
 
 
 def test_ga_mutations(container, items):
     ga = GeneticOptimizer(container, items)
     chrom = ga._random_chromosome()
-    assert ga._mutate_swap(chrom) is not None
-    assert ga._mutate_rotate(chrom) is not None
-    assert ga._mutate_insert(chrom) is not None
+    assert len(ga._mutate_swap(chrom)) == ga.n
+    assert len(ga._mutate_insert(chrom)) == ga.n
+    assert len(ga._mutate_reverse(chrom)) == ga.n
+    assert sorted(ga._mutate_swap(chrom)) == list(range(ga.n))
 
 
 def test_ga_empty_items(container):

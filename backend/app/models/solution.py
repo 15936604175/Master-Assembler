@@ -15,6 +15,7 @@ class Placement(BaseModel):
     rotation: str
     orientation: Optional[str] = None
     is_fragile: Optional[bool] = False
+    weight: Optional[float] = 0.0
 
 
 class UnplacedItem(BaseModel):

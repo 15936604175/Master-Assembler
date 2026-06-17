@@ -1,8 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List, Dict
+from collections import Counter
 import time
 import logging
-from app.models.solution import OptimizeRequest, OptimizeResponse, MultiOptimizeResponse, Placement, UnplacedItem, CGPoint, Stats
+from app.models.solution import (
+    OptimizeRequest, OptimizeResponse, MultiOptimizeResponse,
+    Placement, UnplacedItem, CGPoint, Stats, SolutionMetrics
+)
 from app.models.container import ContainerConfig
 from app.engine.packer import EPacker
 from app.validators.item_validator import validate_request
@@ -21,7 +25,7 @@ def _build_response(result, solution_type: str, container: ContainerConfig,
             "item_id": p.item_id,
             "x": p.x, "y": p.y, "z": p.z,
             "l": p.length, "h": p.height, "w": p.width,
-            "weight": 0.0,
+            "weight": p.weight or 0.0,
             "is_fragile": p.is_fragile or False,
             "orientation": p.orientation,
         }
@@ -30,6 +34,17 @@ def _build_response(result, solution_type: str, container: ContainerConfig,
     report = verifier.verify(placements_dicts)
     result.cg_deviation_ratio = report.cg_deviation_ratio
     result.solution_type = solution_type
+    if result.metrics is None:
+        cg = (result.center_of_gravity.x, result.center_of_gravity.y, result.center_of_gravity.z)
+        result.metrics = SolutionMetrics(
+            avg_support_ratio=round(report.support_score, 4),
+            cg_offset_x=round(abs(cg[0] - container.length / 2), 2),
+            cg_offset_z=round(abs(cg[2] - container.width / 2), 2),
+            fragile_violations=report.fragile_violations,
+        )
+    else:
+        result.metrics.avg_support_ratio = round(report.support_score, 4)
+        result.metrics.fragile_violations = report.fragile_violations
     result.feasibility_report = {
         "is_feasible": report.is_feasible,
         "geometry_ok": report.geometry_ok,
@@ -42,6 +57,23 @@ def _build_response(result, solution_type: str, container: ContainerConfig,
         "messages": report.messages,
     }
     return result
+
+
+def _compute_unplaced(items, placements_dicts) -> List[UnplacedItem]:
+    """Compute unplaced items by comparing requested quantities with placed counts."""
+    placed_counter: Counter = Counter(p["item_id"] for p in placements_dicts)
+    unplaced: List[UnplacedItem] = []
+    for item in items:
+        total_qty = item.quantity
+        placed_qty = placed_counter.get(item.id, 0)
+        unplaced_qty = total_qty - placed_qty
+        if unplaced_qty > 0:
+            unplaced.append(UnplacedItem(
+                item_id=item.id,
+                quantity=unplaced_qty,
+                reason="空间不足或无法满足支撑条件",
+            ))
+    return unplaced
 
 
 def _build_response_from_dicts(container: ContainerConfig, items,
@@ -58,22 +90,32 @@ def _build_response_from_dicts(container: ContainerConfig, items,
     verifier = FeasibilityVerifier(container, items)
     report = verifier.verify(placements_dicts)
 
-    # Approximate center of gravity: average of placement centers weighted by volume
-    cg_x, cg_y, cg_z = 0.0, 0.0, 0.0
-    total_vol = 0.0
-    for p in placements_dicts:
-        vol = p["l"] * p["h"] * p["w"]
-        cg_x += (p["x"] + p["l"] / 2) * vol
-        cg_y += (p["y"] + p["h"] / 2) * vol
-        cg_z += (p["z"] + p["w"] / 2) * vol
-        total_vol += vol
-    if total_vol > 0:
-        cg_x /= total_vol
-        cg_y /= total_vol
-        cg_z /= total_vol
+    total_w = sum(p.get("weight", 0) for p in placements_dicts)
+    if total_w > 0:
+        cg_x = sum(p.get("weight", 0) * (p["x"] + p["l"] / 2) for p in placements_dicts) / total_w
+        cg_y = sum(p.get("weight", 0) * (p["y"] + p["h"] / 2) for p in placements_dicts) / total_w
+        cg_z = sum(p.get("weight", 0) * (p["z"] + p["w"] / 2) for p in placements_dicts) / total_w
+    else:
+        total_vol = sum(p["l"] * p["h"] * p["w"] for p in placements_dicts)
+        if total_vol > 0:
+            cg_x = sum((p["x"] + p["l"] / 2) * p["l"] * p["h"] * p["w"] for p in placements_dicts) / total_vol
+            cg_y = sum((p["y"] + p["h"] / 2) * p["l"] * p["h"] * p["w"] for p in placements_dicts) / total_vol
+            cg_z = sum((p["z"] + p["w"] / 2) * p["l"] * p["h"] * p["w"] for p in placements_dicts) / total_vol
+        else:
+            cg_x = cg_y = cg_z = 0.0
 
     utilization = round(placed_vol / container_vol, 4) if container_vol > 0 else 0
     weight_utilization = round(placed_weight / container.max_weight, 4) if container.max_weight > 0 else 0
+
+    unplaced_items = _compute_unplaced(items, placements_dicts)
+    total_unplaced = sum(u.quantity for u in unplaced_items)
+
+    metrics = SolutionMetrics(
+        avg_support_ratio=round(report.support_score, 4),
+        cg_offset_x=round(abs(cg_x - container.length / 2), 2),
+        cg_offset_z=round(abs(cg_z - container.width / 2), 2),
+        fragile_violations=report.fragile_violations,
+    )
 
     response = OptimizeResponse(
         success=True,
@@ -86,16 +128,18 @@ def _build_response_from_dicts(container: ContainerConfig, items,
                 z=round(p["z"], 2), length=round(p["l"], 2), width=round(p["w"], 2),
                 height=round(p["h"], 2), rotation=p.get("rotation", "lwh"),
                 orientation=p.get("orientation"), is_fragile=p.get("is_fragile", False),
+                weight=p.get("weight", 0.0),
             )
             for p in placements_dicts
         ],
-        unplaced_items=[],
+        unplaced_items=unplaced_items,
         center_of_gravity=CGPoint(x=round(cg_x, 2), y=round(cg_y, 2), z=round(cg_z, 2)),
         stats=Stats(
             total_items_placed=len(placements_dicts),
-            total_items_unplaced=0,
+            total_items_unplaced=total_unplaced,
             algorithm_time_ms=stats_time_ms,
         ),
+        metrics=metrics,
         solution_type=solution_type,
         cg_deviation_ratio=report.cg_deviation_ratio,
         feasibility_report={
@@ -126,7 +170,6 @@ async def optimize(request: OptimizeRequest):
                 },
             )
         packer = EPacker()
-        import time
         start = time.time()
         result = packer.pack(request.container, request.items)
         elapsed = (time.time() - start) * 1000
@@ -143,8 +186,8 @@ async def optimize_phase2(
     request: OptimizeRequest,
     enable_ga: bool = Query(True, description="启用遗传算法优化"),
     enable_ls: bool = Query(True, description="启用局部搜索优化"),
-    enable_pareto: bool = Query(True, description="启用帕累托优化"),
-    timeout_seconds: int = Query(60, description="超时时间（秒）"),
+    enable_pareto: bool = Query(False, description="启用帕累托优化"),
+    timeout_seconds: int = Query(120, description="超时时间（秒）"),
 ):
     """
     Phase 2 多算法优化接口。
@@ -187,6 +230,7 @@ async def optimize_phase2(
 
         # 2. Genetic Algorithm
         ga_response = None
+        ga = None
         if enable_ga:
             elapsed = time.time() - total_start
             if elapsed > timeout_seconds:
@@ -195,7 +239,7 @@ async def optimize_phase2(
                 logger.info("运行遗传算法...")
                 from app.engine.genetic_algorithm import GeneticOptimizer, GAConfig
                 ga = GeneticOptimizer(request.container, request.items, GAConfig(
-                    population_size=20, generations=30, elite_count=3
+                    population_size=20, generations=30, elite_count=2
                 ))
                 ga_placements, _, _ = ga.run()
                 if ga_placements:
@@ -214,10 +258,10 @@ async def optimize_phase2(
                 logger.info("运行局部搜索...")
                 from app.engine.local_search import LocalSearchOptimizer, LSConfig
 
-                seed = ga.best_chromosome if (enable_ga and hasattr(ga, 'best_chromosome') and ga.best_chromosome) else None
+                seed = ga.best_chromosome if (ga is not None and ga.best_chromosome) else None
 
                 ls = LocalSearchOptimizer(request.container, request.items, seed, LSConfig(
-                    max_iterations=100, no_improve_limit=20, strategy="best"
+                    max_iterations=80, no_improve_limit=20, strategy="best"
                 ))
                 ls_result = ls.run()
 

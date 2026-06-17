@@ -5,12 +5,47 @@ from app.models.item import ItemInput, ItemInstance
 from app.models.solution import (
     OptimizeResponse, Placement, UnplacedItem, CGPoint, Stats, SolutionMetrics
 )
-from app.engine.rotation import get_allowed_orientations, get_orientation_for_rotation
+from app.engine.rotation import get_allowed_orientations
 from app.engine.extreme_point import (
     generate_new_eps, is_valid_ep, evaluate_placement,
     check_overlap, check_support, check_cg_stability
 )
 from app.engine.space_cutter import Space, cut_space, remove_degenerate_spaces
+
+MAX_EP_COUNT = 300
+FAST_EP_COUNT = 60
+
+
+def _generate_floor_eps(cl: float, ch: float, cw: float,
+                        grid_step: float = 300.0) -> List[Tuple[float, float, float]]:
+    eps = [(0.0, 0.0, 0.0)]
+    step_x = max(grid_step, cl / 15)
+    step_z = max(grid_step, cw / 15)
+    x = step_x
+    while x < cl:
+        z = step_z
+        while z < cw:
+            eps.append((x, 0.0, z))
+            z += step_z
+        x += step_x
+    eps.append((cl / 2, 0.0, cw / 2))
+    return eps
+
+
+def _prune_eps(eps: List[Tuple[float, float, float]],
+               container: Tuple[float, float, float],
+               max_count: int = MAX_EP_COUNT) -> List[Tuple[float, float, float]]:
+    if len(eps) <= max_count:
+        return eps
+    floor_eps = [ep for ep in eps if ep[1] <= 1.0]
+    non_floor_eps = [ep for ep in eps if ep[1] > 1.0]
+    remaining = max_count - len(floor_eps)
+    if remaining <= 0:
+        return floor_eps[:max_count]
+    if len(non_floor_eps) <= remaining:
+        return floor_eps + non_floor_eps
+    kept_non_floor = non_floor_eps[-remaining:]
+    return floor_eps + kept_non_floor
 
 
 class EPacker:
@@ -21,15 +56,20 @@ class EPacker:
         self.placed_weight: float = 0.0
         self.placed_volume: float = 0.0
         self.container: Tuple[float, float, float] = (0, 0, 0)
+        self.container_volume: float = 0.0
+        self.max_weight: float = 0.0
 
     def pack(self, container: ContainerConfig, items: List[ItemInput]) -> OptimizeResponse:
         start_time = time.time()
         self.container = (container.length, container.height, container.width)
-        container_volume = container.length * container.height * container.width
+        self.container_volume = container.length * container.height * container.width
+        self.max_weight = container.max_weight
         self.placed_weight = 0.0
         self.placed_volume = 0.0
         self.placements = []
-        self.extreme_points = [(0.0, 0.0, 0.0)]
+        self.extreme_points = _generate_floor_eps(
+            container.length, container.height, container.width
+        )
         self.remaining_spaces = [
             Space(0, 0, 0, container.length, container.height, container.width)
         ]
@@ -86,6 +126,7 @@ class EPacker:
                 rotation=p["rotation"],
                 orientation=p.get("orientation"),
                 is_fragile=p.get("is_fragile", False),
+                weight=p.get("weight", 0.0),
             )
             for p in self.placements
         ]
@@ -103,7 +144,7 @@ class EPacker:
         total_placed = len(self.placements)
         total_unplaced = sum(unplaced_map.values())
 
-        volume_util = self.placed_volume / container_volume if container_volume > 0 else 0.0
+        volume_util = self.placed_volume / self.container_volume if self.container_volume > 0 else 0.0
         weight_util = self.placed_weight / max_weight if max_weight > 0 else 0.0
 
         avg_support = self._calc_avg_support()
@@ -140,13 +181,13 @@ class EPacker:
         )
 
     def _try_place(self, item: ItemInstance,
-                   forced_orientation: Optional[Tuple[Tuple[float, float, float], str, str]] = None
+                   forced_orientation: Optional[Tuple[Tuple[float, float, float], str, str]] = None,
+                   fast_mode: bool = False,
                    ) -> bool:
         best_score = -float("inf")
         best_placement: Optional[Tuple[float, float, float, float, float, float]] = None
         best_rot = ""
         best_orientation = ""
-        best_metrics: Dict = {}
 
         if forced_orientation is not None:
             allowed_orientations = [forced_orientation]
@@ -156,37 +197,41 @@ class EPacker:
                 item.forbidden_horizontal_dims,
             )
 
+        cl, ch, cw = self.container
+
         for (rot_l, rot_w, rot_h), rot_label, orientation_name in allowed_orientations:
             item_size = (rot_l, rot_h, rot_w)
             for ep in self.extreme_points:
-                if not is_valid_ep(ep, item_size, self.container):
-                    continue
                 ex, ey, ez = ep
+                if ex + rot_l > cl + 0.001 or ey + rot_h > ch + 0.001 or ez + rot_w > cw + 0.001:
+                    continue
                 if check_overlap(ex, ey, ez, rot_l, rot_h, rot_w, self.placements):
                     continue
-                _, is_supported = check_support(
-                    ex, ey, ez, rot_l, rot_h, rot_w, self.placements
-                )
-                if not is_supported:
-                    continue
-                _, is_cg_ok = check_cg_stability(
-                    ex, ey, ez, rot_l, rot_h, rot_w, item.weight,
-                    self.placements, self.container
-                )
-                max_cg_weight = self.container[0] * 0.1
-                if not is_cg_ok and len(self.placements) > 5 and self.placed_weight > max_cg_weight:
-                    continue
+                if ey > 1.0:
+                    _, is_supported = check_support(
+                        ex, ey, ez, rot_l, rot_h, rot_w, self.placements
+                    )
+                    if not is_supported:
+                        continue
 
-                score, metrics = evaluate_placement(
-                    ep, item_size, self.container, self.placements,
-                    weight=item.weight, is_fragile=item.is_fragile
-                )
+                if fast_mode:
+                    center_x, center_y, center_z = cl / 2, ch / 2, cw / 2
+                    max_dist = ((cl / 2) ** 2 + (ch / 2) ** 2 + (cw / 2) ** 2) ** 0.5
+                    dist = ((ex - center_x) ** 2 + (ey - center_y) ** 2 + (ez - center_z) ** 2) ** 0.5
+                    proximity = 1.0 - (dist / max_dist) if max_dist > 0 else 1.0
+                    gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
+                    score = 0.5 * proximity + 0.3 * gravity_score + 0.2
+                else:
+                    score, metrics = evaluate_placement(
+                        ep, item_size, self.container, self.placements,
+                        weight=item.weight, is_fragile=item.is_fragile
+                    )
+
                 if score > best_score:
                     best_score = score
                     best_placement = (ex, ey, ez, rot_l, rot_h, rot_w)
                     best_rot = rot_label
                     best_orientation = orientation_name
-                    best_metrics = metrics
 
         if best_placement is None:
             return False
@@ -218,7 +263,9 @@ class EPacker:
             if key not in seen:
                 seen.add(key)
                 unique_eps.append(nep)
-        self.extreme_points = unique_eps
+        unique_eps = self._remove_consumed_eps(unique_eps)
+        max_ep = FAST_EP_COUNT if fast_mode else MAX_EP_COUNT
+        self.extreme_points = _prune_eps(unique_eps, self.container, max_ep)
 
         item_box = (x, y, z, l, h, w)
         new_spaces = []
@@ -227,6 +274,23 @@ class EPacker:
         self.remaining_spaces = remove_degenerate_spaces(new_spaces, min_size=10.0)
 
         return True
+
+    def _remove_consumed_eps(self, eps: List[Tuple[float, float, float]]
+                              ) -> List[Tuple[float, float, float]]:
+        if not self.placements:
+            return eps
+        last = self.placements[-1]
+        px, py, pz = last["x"], last["y"], last["z"]
+        pl, ph, pw = last["l"], last["h"], last["w"]
+        valid = []
+        for ep in eps:
+            ex, ey, ez = ep
+            if (px <= ex < px + pl and
+                py <= ey < py + ph and
+                pz <= ez < pz + pw):
+                continue
+            valid.append(ep)
+        return valid
 
     def _calc_center_of_gravity(self) -> Tuple[float, float, float]:
         if not self.placements:
@@ -275,7 +339,6 @@ class EPacker:
 
     def _calc_cg_deviation_ratio(self, cg: Tuple[float, float, float],
                                   container: ContainerConfig) -> float:
-        """Calculate CG deviation as ratio (0-1), 0=perfect center, 1=max deviation."""
         if not self.placements:
             return 0.0
         cx_center = container.length / 2

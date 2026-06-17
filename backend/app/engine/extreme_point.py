@@ -2,7 +2,7 @@ from typing import List, Tuple, Dict
 
 ExtremePoint = Tuple[float, float, float]
 
-SUPPORT_THRESHOLD = 0.6
+SUPPORT_THRESHOLD = 0.1
 VERTICAL_TOLERANCE = 1.0
 
 
@@ -160,28 +160,46 @@ def evaluate_placement(ep: ExtremePoint, item_size: Tuple[float, float, float],
             ex, ey, ez, il, ih, iw, weight, existing_placements
         )
 
-    w1, w2, w3, w4, w5 = 0.25, 0.30, 0.20, 0.15, 0.10
+    w1, w2, w3, w4, w5 = 0.10, 0.15, 0.05, 0.05, 0.05
 
-    max_dist = (cl**2 + ch**2 + cw**2) ** 0.5
-    dist = (ex**2 + ey**2 + ez**2) ** 0.5
+    center_x, center_y, center_z = cl / 2, ch / 2, cw / 2
+    max_dist = ((cl / 2) ** 2 + (ch / 2) ** 2 + (cw / 2) ** 2) ** 0.5
+    dist = ((ex - center_x) ** 2 + (ey - center_y) ** 2 + (ez - center_z) ** 2) ** 0.5
     proximity = 1.0 - (dist / max_dist) if max_dist > 0 else 1.0
 
     gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
 
     adj_score = 0.0
     if existing_placements:
-        min_gap = min(
-            ((ex - p["x"])**2 + (ey - p["y"])**2 + (ez - p["z"])**2) ** 0.5
-            for p in existing_placements
-        )
-        adj_score = 1.0 - min(max_dist > 0 and min_gap / max_dist or 0, 1.0)
+        contact_area = 0.0
+        item_footprint = il * iw
+        for p in existing_placements:
+            px, py, pz = p["x"], p["y"], p["z"]
+            pl, ph, pw = p["l"], p["h"], p["w"]
+
+            overlap_x = max(0, min(ex + il, px + pl) - max(ex, px))
+            overlap_z = max(0, min(ez + iw, pz + pw) - max(ez, pz))
+            contact_xy = max(0, min(ex + il, px + pl) - max(ex, px))
+            contact_yz = max(0, min(ey + ih, py + ph) - max(ey, py))
+
+            if abs(ey - (py + ph)) <= VERTICAL_TOLERANCE:
+                contact_area += overlap_x * overlap_z
+            elif abs((ey + ih) - py) <= VERTICAL_TOLERANCE:
+                contact_area += overlap_x * overlap_z
+            elif abs(ex - (px + pl)) <= VERTICAL_TOLERANCE or abs((ex + il) - px) <= VERTICAL_TOLERANCE:
+                contact_area += contact_yz * overlap_z
+            elif abs(ez - (pz + pw)) <= VERTICAL_TOLERANCE or abs((ez + iw) - pz) <= VERTICAL_TOLERANCE:
+                contact_area += contact_xy * contact_yz
+
+        if item_footprint > 0:
+            adj_score = min(contact_area / item_footprint, 1.0)
 
     total_score = (w1 * proximity
                    + w2 * support_ratio
                    + w3 * cg_score
                    + w4 * gravity_score
                    + w5 * fragile_safe
-                   + 0.1 * adj_score)
+                   + 0.60 * adj_score)
 
     metrics = {
         "proximity": round(proximity, 4),

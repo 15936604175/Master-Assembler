@@ -58,9 +58,9 @@ export default function PlacedItem({
   const cy = placement.y + placement.height / 2;
   const cz = placement.z + placement.width / 2;
 
-  // 标签字号根据商品尺寸自适应（避免小商品标签过大遮挡视线）
+  // 标签根据商品尺寸自适应缩放
   const minDim = Math.min(placement.length, placement.height, placement.width);
-  const fontSize = Math.max(12, Math.min(28, minDim * 0.18));
+  const fontSize = Math.max(8, Math.min(18, minDim * 0.06));
 
   // 边框颜色：默认深灰，hover 黑色，选中红色
   // 关键：边框不使用透明度，避免旋转时透明线框排序不稳定导致闪烁/消失
@@ -112,7 +112,7 @@ export default function PlacedItem({
       {/* 商品编号标签（仅在选中同类商品时显示） */}
       {labelVisible && (
         <Html
-          position={[cx, placement.y + placement.height + fontSize * 0.4, cz]}
+          position={[cx, placement.y + placement.height + fontSize * 0.3, cz]}
           center
           distanceFactor={distanceFactor}
           zIndexRange={[20, 0]}
@@ -120,11 +120,11 @@ export default function PlacedItem({
         >
           <div
             style={{
-              padding: '2px 6px',
-              borderRadius: 4,
+              padding: '1px 4px',
+              borderRadius: 3,
               background: selected ? 'rgba(239,68,68,0.92)' : 'rgba(255,255,255,0.92)',
               color: selected ? '#fff' : '#0f172a',
-              fontSize: 13,
+              fontSize: fontSize,
               fontWeight: 600,
               whiteSpace: 'nowrap',
               border: selected ? '1px solid #dc2626' : '1px solid #cbd5e1',

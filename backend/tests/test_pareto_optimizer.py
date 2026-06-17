@@ -1,5 +1,5 @@
 import pytest
-from app.engine.pareto_optimizer import NSGAOptimizer, NSGAConfig, Individual
+from app.engine.pareto_optimizer import NSGAOptimizer, NSGAConfig, NSGASolution
 from app.models.container import ContainerConfig
 from app.models.item import ItemInput
 
@@ -25,66 +25,65 @@ def test_nsga_initialization(container, items):
 def test_nsga_config_defaults():
     config = NSGAConfig()
     assert config.population_size == 60
-    assert config.generations == 100
-    assert config.elite_count == 10
-
-
-def test_nsga_dominated():
-    nsga = NSGAOptimizer.__new__(NSGAOptimizer)
-    assert nsga._dominated((0.8, 0.9, 0.7), (0.7, 0.8, 0.6)) is True
-    assert nsga._dominated((0.7, 0.8, 0.6), (0.8, 0.9, 0.7)) is False
-    assert nsga._dominated((0.8, 0.8, 0.8), (0.8, 0.8, 0.8)) is False
+    assert config.generations == 80
+    assert config.elite_count == 5
 
 
 def test_nsga_random_chromosome(container, items):
     nsga = NSGAOptimizer(container, items)
     chrom = nsga._random_chromosome()
     assert len(chrom) == nsga.n
+    assert sorted(chrom) == list(range(nsga.n))
 
 
 def test_nsga_greedy_chromosome(container, items):
     nsga = NSGAOptimizer(container, items)
     chrom = nsga._greedy_chromosome()
     assert len(chrom) == nsga.n
+    assert sorted(chrom) == list(range(nsga.n))
 
 
 def test_nsga_decode(container, items):
     nsga = NSGAOptimizer(container, items)
     chrom = nsga._random_chromosome()
-    placements = nsga._decode(chrom)
+    placements, unplaced = nsga._decode(chrom)
     assert isinstance(placements, list)
+    assert isinstance(unplaced, list)
+    assert len(placements) + len(unplaced) == nsga.n
 
 
 def test_nsga_evaluate(container, items):
     nsga = NSGAOptimizer(container, items)
     chrom = nsga._random_chromosome()
-    ind = nsga._evaluate(chrom)
-    assert isinstance(ind, Individual)
-    assert len(ind.objectives) == 3
+    sol = nsga._evaluate_solution(chrom)
+    assert sol is None or isinstance(sol, NSGASolution)
+    if sol is not None:
+        assert len(sol.objectives) == 3
 
 
 def test_nsga_non_dominated_sort(container, items):
     nsga = NSGAOptimizer(container, items)
-    inds = [
-        Individual(chromosome=[0], objectives=(0.5, 0.5, 0.5)),
-        Individual(chromosome=[1], objectives=(0.8, 0.8, 0.8)),
-        Individual(chromosome=[2], objectives=(0.6, 0.9, 0.7)),
+    sols = [
+        NSGASolution(chromosome=[0], placements=[], objectives=[0.5, 0.5, 0.5]),
+        NSGASolution(chromosome=[1], placements=[], objectives=[0.8, 0.8, 0.8]),
+        NSGASolution(chromosome=[2], placements=[], objectives=[0.6, 0.9, 0.7]),
     ]
-    fronts = nsga._non_dominated_sort(inds)
+    fronts = nsga._non_dominated_sort(sols)
     assert len(fronts) >= 1
     assert len(fronts[0]) >= 1
 
 
 def test_nsga_crowding_distance(container, items):
     nsga = NSGAOptimizer(container, items)
-    inds = [
-        Individual(chromosome=[0], objectives=(0.5, 0.5, 0.5)),
-        Individual(chromosome=[1], objectives=(0.8, 0.8, 0.8)),
-        Individual(chromosome=[2], objectives=(0.6, 0.9, 0.7)),
+    sols = [
+        NSGASolution(chromosome=[0], placements=[], objectives=[0.5, 0.5, 0.5]),
+        NSGASolution(chromosome=[1], placements=[], objectives=[0.8, 0.8, 0.8]),
+        NSGASolution(chromosome=[2], placements=[], objectives=[0.6, 0.9, 0.7]),
+        NSGASolution(chromosome=[3], placements=[], objectives=[0.7, 0.6, 0.65]),
     ]
-    nsga._crowding_distance(inds, [0, 1, 2])
-    for ind in inds:
-        assert ind.crowding_distance >= 0
+    nsga._crowding_distance(sols)
+    for s in sols:
+        assert s.crowding_distance >= 0
 
 
 def test_nsga_run(container, items):
@@ -94,10 +93,8 @@ def test_nsga_run(container, items):
     )
     result = nsga.run()
     assert hasattr(result, 'solutions')
-    assert hasattr(result, 'extreme_util')
-    assert hasattr(result, 'extreme_stability')
-    assert hasattr(result, 'extreme_cg')
-    assert hasattr(result, 'balanced')
+    assert hasattr(result, 'pareto_front')
+    assert hasattr(result, 'generations')
 
 
 def test_nsga_returns_pareto_front(container, items):
@@ -107,26 +104,31 @@ def test_nsga_returns_pareto_front(container, items):
     )
     result = nsga.run()
     assert len(result.solutions) >= 0
-    assert result.pareto_count == len(result.solutions)
+    assert len(result.pareto_front) >= 1
 
 
 def test_nsga_selection(container, items):
     nsga = NSGAOptimizer(container, items, NSGAConfig(population_size=10, generations=5))
-    inds = [
-        Individual(chromosome=[i], objectives=(0.5 + i * 0.05, 0.5 + i * 0.03, 0.5 + i * 0.02))
+    sols = [
+        NSGASolution(
+            chromosome=nsga._random_chromosome(),
+            placements=[],
+            objectives=[0.5 + i * 0.05, 0.5 + i * 0.03, 0.5 + i * 0.02],
+            rank=0,
+        )
         for i in range(10)
     ]
-    selected = nsga._select(inds, 5)
-    assert len(selected) == 5
+    selected = nsga._tournament_select(sols)
+    assert len(selected) == nsga.n
 
 
 def test_nsga_crossover(container, items):
     nsga = NSGAOptimizer(container, items)
     p1 = nsga._random_chromosome()
     p2 = nsga._random_chromosome()
-    c1, c2 = nsga._crossover(p1, p2)
+    c1 = nsga._order_crossover(p1, p2)
     assert len(c1) == len(p1)
-    assert len(c2) == len(p2)
+    assert sorted(c1) == list(range(nsga.n))
 
 
 def test_nsga_mutate(container, items):
@@ -134,6 +136,7 @@ def test_nsga_mutate(container, items):
     chrom = nsga._random_chromosome()
     mutated = nsga._mutate(chrom)
     assert len(mutated) == len(chrom)
+    assert sorted(mutated) == list(range(nsga.n))
 
 
 def test_nsga_empty_items(container):

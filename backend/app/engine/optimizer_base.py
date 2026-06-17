@@ -5,7 +5,7 @@ Eliminates code duplication between GeneticOptimizer, LocalSearchOptimizer,
 and NSGAOptimizer by providing common methods:
 - _expand_instances: expand ItemInput into ItemInstance list
 - _build_rotation_constraints: pre-compute allowed rotations per instance
-- _decode: decode chromosome to placement dicts
+- _decode: decode chromosome (instance permutation) to placement dicts
 - _greedy_chromosome: generate initial chromosome from greedy packer
 - _all_rotations: constant list of 6 rotations
 """
@@ -17,6 +17,7 @@ from app.models.item import ItemInput, ItemInstance
 from app.engine.packer import EPacker
 from app.engine.feasibility import FeasibilityVerifier
 from app.engine.rotation import get_all_rotations, get_allowed_orientations
+from app.engine.space_cutter import Space
 
 
 class OptimizerBase:
@@ -69,7 +70,6 @@ class OptimizerBase:
             allowed_indices = []
             for (rl, rw, rh), _, _ in allowed_orientations:
                 for idx, (al, aw, ah) in enumerate(all_rots):
-                    # Match both (rl, rw, rh) and (rw, rl, rh) — same vertical dim
                     if (abs(ah - rh) < 0.01 and
                         ((abs(al - rl) < 0.01 and abs(aw - rw) < 0.01) or
                          (abs(al - rw) < 0.01 and abs(aw - rl) < 0.01))):
@@ -82,94 +82,94 @@ class OptimizerBase:
         inst = self.instances[inst_idx]
         return get_all_rotations(inst.length, inst.width, inst.height)
 
-    def _decode(self, chromosome: List[int]) -> List[Dict]:
-        """Decode chromosome (all_rots indices) into placement dicts."""
+    def _init_packer(self) -> EPacker:
+        """Create a fully-initialized EPacker for decoding (no items placed yet)."""
+        from app.engine.packer import _generate_floor_eps, FAST_EP_COUNT
         packer = EPacker()
         packer.container = (self.container.length, self.container.height, self.container.width)
         packer.container_volume = self.container.length * self.container.height * self.container.width
-        for inst_idx, orient_idx in enumerate(chromosome):
-            allowed = self.allowed_rotations[inst_idx]
-            if not allowed:
+        packer.max_weight = self.container.max_weight
+        packer.placements = []
+        packer.extreme_points = _generate_floor_eps(
+            self.container.length, self.container.height, self.container.width,
+            grid_step=max(300.0, self.container.length / 10)
+        )[:FAST_EP_COUNT]
+        packer.remaining_spaces = [
+            Space(0, 0, 0, self.container.length, self.container.height, self.container.width)
+        ]
+        packer.placed_weight = 0.0
+        packer.placed_volume = 0.0
+        return packer
+
+    def _decode(self, chromosome: List[int]) -> Tuple[List[Dict], List[ItemInstance]]:
+        """Decode chromosome (instance index permutation) into placement dicts.
+
+        Each gene is an index into self.instances. Items are placed in the order
+        given by the chromosome; rotation is chosen automatically by the packer's
+        evaluate_placement. Items that cannot be placed are collected and returned.
+
+        Returns (placements, unplaced_instances).
+        """
+        packer = self._init_packer()
+        unplaced: List[ItemInstance] = []
+
+        for inst_idx in chromosome:
+            if inst_idx < 0 or inst_idx >= self.n:
                 continue
-            # chromosome stores all_rots indices; ensure it's in allowed list
-            if orient_idx not in allowed:
-                orient_idx = allowed[orient_idx % len(allowed)]
             inst = self.instances[inst_idx]
-
-            allowed_orientations = get_allowed_orientations(
-                inst.length, inst.width, inst.height,
-                inst.forbidden_horizontal_dims,
-            )
-
-            all_rots = get_all_rotations(inst.length, inst.width, inst.height)
-            rot_l, rot_w, rot_h = all_rots[orient_idx]
-
-            chosen_orientation = None
-            for o in allowed_orientations:
-                (rl, rw, rh), label, name = o
-                if abs(rl - rot_l) < 0.01 and abs(rw - rot_w) < 0.01 and abs(rh - rot_h) < 0.01:
-                    chosen_orientation = o
-                    break
-
-            if chosen_orientation is None:
+            if packer.placed_weight + inst.weight > self.container.max_weight:
+                unplaced.append(inst)
+                continue
+            if not packer._try_place(inst, fast_mode=True):
+                unplaced.append(inst)
                 continue
 
-            modified = ItemInstance(
-                item_id=inst.item_id,
-                length=inst.length,
-                width=inst.width,
-                height=inst.height,
-                weight=inst.weight,
-                is_fragile=inst.is_fragile,
-                batch_number=inst.batch_number,
-                forbidden_horizontal_dims=inst.forbidden_horizontal_dims,
-            )
-            if not packer._try_place(modified, forced_orientation=chosen_orientation):
-                break
-        return packer.placements
+        return packer.placements, unplaced
 
     def _random_chromosome(self) -> List[int]:
-        """Generate a random chromosome respecting rotation constraints."""
+        """Generate a random permutation chromosome (instance indices)."""
         if self.n == 0:
             return []
-        return [random.choice(self.allowed_rotations[i]) for i in range(self.n)]
+        order = list(range(self.n))
+        random.shuffle(order)
+        return order
 
     def _greedy_chromosome(self) -> List[int]:
-        """Generate a greedy chromosome using EPacker."""
+        """Generate a greedy chromosome using EPacker.
+
+        Returns a permutation of instance indices following the greedy placement
+        order. Placed items come first (in placement order), unplaced items are
+        appended at the end.
+        """
         packer = EPacker()
         packer.pack(self.container, self.items)
         placements = packer.placements
 
-        # Build a queue of placements per item_id to handle duplicates
-        placement_queue: Dict[str, List[Dict]] = {}
+        available: Dict[str, List[int]] = {}
+        for i, inst in enumerate(self.instances):
+            available.setdefault(inst.item_id, []).append(i)
+
+        order: List[int] = []
+        used: set = set()
         for p in placements:
             iid = p["item_id"]
-            if iid not in placement_queue:
-                placement_queue[iid] = []
-            placement_queue[iid].append(p)
+            if iid in available and available[iid]:
+                idx = available[iid].pop(0)
+                order.append(idx)
+                used.add(idx)
 
-        chromosome: List[int] = []
-        for inst_idx, inst in enumerate(self.instances):
-            all_rots = get_all_rotations(inst.length, inst.width, inst.height)
-            rot_l, rot_w, rot_h = inst.length, inst.width, inst.height
+        for i in range(self.n):
+            if i not in used:
+                order.append(i)
 
-            # Pop the next placement for this item_id (handles duplicates correctly)
-            if inst.item_id in placement_queue and placement_queue[inst.item_id]:
-                placed = placement_queue[inst.item_id].pop(0)
-                rot_l, rot_w, rot_h = placed["l"], placed["w"], placed["h"]
+        return order
 
-            rot_idx = 0
-            for idx, (al, aw, ah) in enumerate(all_rots):
-                if abs(al - rot_l) < 0.01 and abs(aw - rot_w) < 0.01 and abs(ah - rot_h) < 0.01:
-                    rot_idx = idx
-                    break
+    def _fast_greedy_chromosome(self) -> List[int]:
+        """Generate a greedy chromosome quickly without running full packer.
 
-            allowed = self.allowed_rotations[inst_idx]
-            if rot_idx not in allowed:
-                rot_idx = allowed[0] if allowed else 0
-            chromosome.append(rot_idx)
-
-        return chromosome
+        Simply returns the default sorted order (large items first).
+        """
+        return list(range(self.n))
 
     def evaluate_objectives(self, placements: List[Dict]
                             ) -> Tuple[float, float, float]:
@@ -177,17 +177,34 @@ class OptimizerBase:
         if not placements:
             return 0.0, 0.0, 0.0
 
-        report = self.verifier.verify(placements)
         container_vol = self.container.length * self.container.height * self.container.width
         placed_vol = sum(p["l"] * p["h"] * p["w"] for p in placements)
         utilization = placed_vol / container_vol if container_vol > 0 else 0.0
-        stability = report.stability_score
-        cg_balance = max(0.0, 1.0 - report.cg_deviation_ratio * 3)
+
+        total_w = sum(p.get("weight", 0) for p in placements)
+        if total_w > 0:
+            cg_x = sum(p.get("weight", 0) * (p["x"] + p["l"] / 2) for p in placements) / total_w
+            cg_z = sum(p.get("weight", 0) * (p["z"] + p["w"] / 2) for p in placements) / total_w
+        else:
+            total_vol = sum(p["l"] * p["h"] * p["w"] for p in placements)
+            if total_vol > 0:
+                cg_x = sum((p["x"] + p["l"] / 2) * p["l"] * p["h"] * p["w"] for p in placements) / total_vol
+                cg_z = sum((p["z"] + p["w"] / 2) * p["l"] * p["h"] * p["w"] for p in placements) / total_vol
+            else:
+                cg_x = cg_z = 0.0
+
+        offset_x = abs(cg_x - self.container.length / 2) / (self.container.length / 2) if self.container.length > 0 else 0
+        offset_z = abs(cg_z - self.container.width / 2) / (self.container.width / 2) if self.container.width > 0 else 0
+        cg_deviation = min(1.0, (offset_x ** 2 + offset_z ** 2) ** 0.5 / (2 ** 0.5))
+        cg_balance = max(0.0, 1.0 - cg_deviation * 3)
+
+        stability = max(0.0, min(1.0, 0.7 * cg_balance + 0.3 * utilization))
+
         return utilization, stability, cg_balance
 
     def score_placements(self, placements: List[Dict],
-                        weights: Tuple[float, float, float] = (0.5, 0.3, 0.2)
+                        weights: Tuple[float, float, float] = (1.0, 0.0, 0.0)
                         ) -> float:
-        """Compute weighted fitness score."""
+        """Compute weighted fitness score. Space utilization is the only priority."""
         u, s, cg = self.evaluate_objectives(placements)
         return weights[0] * u + weights[1] * s + weights[2] * cg
