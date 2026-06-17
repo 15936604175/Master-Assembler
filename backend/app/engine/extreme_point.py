@@ -163,7 +163,7 @@ def evaluate_placement(ep: ExtremePoint, item_size: Tuple[float, float, float],
             ex, ey, ez, il, ih, iw, weight, existing_placements
         )
 
-    w1, w2, w3, w4, w5 = 0.20, 0.20, 0.10, 0.10, 0.05
+    w1, w2, w3, w4, w5 = 0.30, 0.25, 0.02, 0.10, 0.08
 
     blf_score = 1.0 - (ey / ch * 0.5 + ex / cl * 0.3 + ez / cw * 0.2) if cl > 0 and ch > 0 and cw > 0 else 1.0
     blf_score = max(0.0, min(1.0, blf_score))
@@ -200,7 +200,7 @@ def evaluate_placement(ep: ExtremePoint, item_size: Tuple[float, float, float],
                    + w3 * cg_score
                    + w4 * gravity_score
                    + w5 * fragile_safe
-                   + 0.35 * adj_score)
+                   + 0.25 * adj_score)
 
     metrics = {
         "blf_score": round(blf_score, 4),
@@ -243,9 +243,9 @@ def evaluate_placement_fast(ep: ExtremePoint, item_size: Tuple[float, float, flo
 
     gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
 
-    total_score = (0.30 * blf_score
+    total_score = (0.35 * blf_score
                    + 0.25 * support_ratio
-                   + 0.15 * cg_score
+                   + 0.05 * cg_score
                    + 0.15 * gravity_score
                    + 0.15 * fragile_safe)
 
