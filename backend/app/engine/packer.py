@@ -7,7 +7,7 @@ from app.models.solution import (
 )
 from app.engine.rotation import get_allowed_orientations
 from app.engine.extreme_point import (
-    generate_new_eps, is_valid_ep, evaluate_placement,
+    generate_new_eps, is_valid_ep, evaluate_placement, evaluate_placement_fast,
     check_overlap, check_support, check_cg_stability
 )
 from app.engine.space_cutter import Space, cut_space, remove_degenerate_spaces
@@ -215,12 +215,10 @@ class EPacker:
                         continue
 
                 if fast_mode:
-                    center_x, center_y, center_z = cl / 2, ch / 2, cw / 2
-                    max_dist = ((cl / 2) ** 2 + (ch / 2) ** 2 + (cw / 2) ** 2) ** 0.5
-                    dist = ((ex - center_x) ** 2 + (ey - center_y) ** 2 + (ez - center_z) ** 2) ** 0.5
-                    proximity = 1.0 - (dist / max_dist) if max_dist > 0 else 1.0
-                    gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
-                    score = 0.5 * proximity + 0.3 * gravity_score + 0.2
+                    score = evaluate_placement_fast(
+                        ep, item_size, self.container, self.placements,
+                        weight=item.weight, is_fragile=item.is_fragile
+                    )
                 else:
                     score, metrics = evaluate_placement(
                         ep, item_size, self.container, self.placements,

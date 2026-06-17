@@ -239,7 +239,7 @@ async def optimize_phase2(
                 logger.info("运行遗传算法...")
                 from app.engine.genetic_algorithm import GeneticOptimizer, GAConfig
                 ga = GeneticOptimizer(request.container, request.items, GAConfig(
-                    population_size=20, generations=30, elite_count=2
+                    population_size=15, generations=25, elite_count=2
                 ))
                 ga_placements, _, _ = ga.run()
                 if ga_placements:

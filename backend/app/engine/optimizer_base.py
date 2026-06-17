@@ -184,18 +184,21 @@ class OptimizerBase:
         total_w = sum(p.get("weight", 0) for p in placements)
         if total_w > 0:
             cg_x = sum(p.get("weight", 0) * (p["x"] + p["l"] / 2) for p in placements) / total_w
+            cg_y = sum(p.get("weight", 0) * (p["y"] + p["h"] / 2) for p in placements) / total_w
             cg_z = sum(p.get("weight", 0) * (p["z"] + p["w"] / 2) for p in placements) / total_w
         else:
             total_vol = sum(p["l"] * p["h"] * p["w"] for p in placements)
             if total_vol > 0:
                 cg_x = sum((p["x"] + p["l"] / 2) * p["l"] * p["h"] * p["w"] for p in placements) / total_vol
+                cg_y = sum((p["y"] + p["h"] / 2) * p["l"] * p["h"] * p["w"] for p in placements) / total_vol
                 cg_z = sum((p["z"] + p["w"] / 2) * p["l"] * p["h"] * p["w"] for p in placements) / total_vol
             else:
-                cg_x = cg_z = 0.0
+                cg_x = cg_y = cg_z = 0.0
 
         offset_x = abs(cg_x - self.container.length / 2) / (self.container.length / 2) if self.container.length > 0 else 0
+        offset_y = abs(cg_y - self.container.height / 2) / (self.container.height / 2) if self.container.height > 0 else 0
         offset_z = abs(cg_z - self.container.width / 2) / (self.container.width / 2) if self.container.width > 0 else 0
-        cg_deviation = min(1.0, (offset_x ** 2 + offset_z ** 2) ** 0.5 / (2 ** 0.5))
+        cg_deviation = min(1.0, (offset_x ** 2 + offset_y ** 2 + offset_z ** 2) ** 0.5 / (3 ** 0.5))
         cg_balance = max(0.0, 1.0 - cg_deviation * 3)
 
         stability = max(0.0, min(1.0, 0.7 * cg_balance + 0.3 * utilization))
@@ -203,8 +206,8 @@ class OptimizerBase:
         return utilization, stability, cg_balance
 
     def score_placements(self, placements: List[Dict],
-                        weights: Tuple[float, float, float] = (1.0, 0.0, 0.0)
+                        weights: Tuple[float, float, float] = (0.6, 0.1, 0.3)
                         ) -> float:
-        """Compute weighted fitness score. Space utilization is the only priority."""
+        """Compute weighted fitness score: utilization + stability + CG balance."""
         u, s, cg = self.evaluate_objectives(placements)
         return weights[0] * u + weights[1] * s + weights[2] * cg

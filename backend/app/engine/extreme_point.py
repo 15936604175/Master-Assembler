@@ -212,3 +212,42 @@ def evaluate_placement(ep: ExtremePoint, item_size: Tuple[float, float, float],
     }
 
     return round(total_score, 4), metrics
+
+
+def evaluate_placement_fast(ep: ExtremePoint, item_size: Tuple[float, float, float],
+                             container: Tuple[float, float, float],
+                             existing_placements: List[Dict],
+                             weight: float = 1.0,
+                             is_fragile: bool = False) -> float:
+    ex, ey, ez = ep
+    il, ih, iw = item_size
+    cl, ch, cw = container
+
+    support_ratio, is_supported = check_support(
+        ex, ey, ez, il, ih, iw, existing_placements
+    )
+
+    cg_score, is_cg_ok = check_cg_stability(
+        ex, ey, ez, il, ih, iw, weight, existing_placements, container
+    )
+
+    fragile_safe = 1.0
+    if not is_fragile:
+        fragile_safe, _ = check_fragile_safety(
+            ex, ey, ez, il, ih, iw, weight, existing_placements
+        )
+
+    center_x, center_y, center_z = cl / 2, ch / 2, cw / 2
+    max_dist = ((cl / 2) ** 2 + (ch / 2) ** 2 + (cw / 2) ** 2) ** 0.5
+    dist = ((ex - center_x) ** 2 + (ey - center_y) ** 2 + (ez - center_z) ** 2) ** 0.5
+    proximity = 1.0 - (dist / max_dist) if max_dist > 0 else 1.0
+
+    gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
+
+    total_score = (0.25 * proximity
+                   + 0.25 * support_ratio
+                   + 0.20 * cg_score
+                   + 0.15 * gravity_score
+                   + 0.15 * fragile_safe)
+
+    return round(total_score, 4)
