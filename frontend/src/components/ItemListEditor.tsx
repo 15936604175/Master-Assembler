@@ -1,4 +1,4 @@
-import { Button, InputNumber, Table, Card } from 'antd';
+import { Button, InputNumber, Table, Input, Tooltip } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 
 export interface ItemRow {
@@ -19,7 +19,15 @@ interface ItemListEditorProps {
   onChange: (items: ItemRow[]) => void;
 }
 
-const genId = (index: number) => String.fromCharCode(65 + (index % 26));
+const genId = (index: number) => {
+  // 生成唯一 ID：A, B, ... Z, AA, AB, ... AZ, BA, ...（类似 Excel 列名）
+  if (index < 26) {
+    return String.fromCharCode(65 + index);
+  }
+  const first = Math.floor(index / 26) - 1;
+  const second = index % 26;
+  return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
+};
 
 /** 等轴测3D长方体（六面半透明 + 线框） */
 function IsoCube3D({ dx, dy, dz, checked }: {
@@ -138,9 +146,18 @@ function OrientationSelector({ item, onUpdate }: {
 
 export default function ItemListEditor({ value, onChange }: ItemListEditorProps) {
   const addItem = () => {
+    // 找到一个不重复的 ID
+    const existingIds = new Set(value.map(item => item.id));
+    let newId = '';
+    let index = value.length;
+    do {
+      newId = genId(index);
+      index++;
+    } while (existingIds.has(newId));
+
     const newItem: ItemRow = {
       key: Date.now().toString(),
-      id: genId(value.length),
+      id: newId,
       length: 100,
       width: 100,
       height: 100,
@@ -154,9 +171,19 @@ export default function ItemListEditor({ value, onChange }: ItemListEditorProps)
   };
 
   const removeItem = (key: string) => {
-    const next = value
-      .filter((item) => item.key !== key)
-      .map((item, i) => ({ ...item, id: genId(i) }));
+    const remaining = value.filter((item) => item.key !== key);
+    // 重新分配 ID，确保不重复
+    const existingIds = new Set<string>();
+    const next = remaining.map((item, i) => {
+      let newId = '';
+      let idx = i;
+      do {
+        newId = genId(idx);
+        idx++;
+      } while (existingIds.has(newId));
+      existingIds.add(newId);
+      return { ...item, id: newId };
+    });
     onChange(next);
   };
 
@@ -165,7 +192,23 @@ export default function ItemListEditor({ value, onChange }: ItemListEditorProps)
   };
 
   const columns = [
-    { title: 'ID', dataIndex: 'id', width: 50 },
+    { title: 'ID', width: 70,
+      render: (_: any, record: ItemRow) => {
+        const otherIds = value.filter(item => item.key !== record.key).map(item => item.id);
+        const isDuplicate = otherIds.includes(record.id);
+        return (
+          <Tooltip title={isDuplicate ? 'ID 已重复，请修改' : ''} open={isDuplicate}>
+            <Input
+              size="small"
+              value={record.id}
+              status={isDuplicate ? 'error' : undefined}
+              onChange={(e) => updateItem(record.key, 'id', e.target.value)}
+              style={{ width: 60 }}
+            />
+          </Tooltip>
+        );
+      },
+    },
     { title: '长', width: 70,
       render: (_: any, record: ItemRow) => (
         <InputNumber
@@ -258,13 +301,13 @@ export default function ItemListEditor({ value, onChange }: ItemListEditorProps)
   ];
 
   return (
-    <Card title="商品列表" size="small" style={{ marginBottom: 16 }}>
+    <div>
       <Table
         dataSource={value}
         columns={columns}
         pagination={false}
         size="small"
-        scroll={{ x: 1050 }}
+        scroll={{ x: 'max-content' }}
         rowKey="key"
       />
       <Button
@@ -275,6 +318,6 @@ export default function ItemListEditor({ value, onChange }: ItemListEditorProps)
       >
         添加商品
       </Button>
-    </Card>
+    </div>
   );
 }

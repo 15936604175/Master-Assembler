@@ -1,278 +1,38 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Layers, Box, Play, RotateCcw } from 'lucide-react';
-import { Switch, Button, Tooltip } from 'antd';
-import PackageViewer3D from './PackageViewer3D';
-import type { PackageOption } from '../services/api';
-import './Package3DModal.css';
+请将当前装箱优化系统重构为“专业工业软件 / 企业级 SaaS”风格，整体目标是：克制、可靠、清晰、高效率，而不是像 AI 拼接出的页面。
 
-interface Package3DModalProps {
-  visible: boolean;
-  onClose: () => void;
-  packageOption: PackageOption | null;
-  itemSize: { length: number; width: number; height: number };
-}
+页面风格要求：
+1. 使用浅灰白企业后台风格作为主视觉，不要大面积高饱和渐变背景。
+2. 主色采用稳重科技蓝，辅以中性灰、成功绿、警告橙、错误红。
+3. 页面整体采用 8px/10px 统一圆角，轻阴影，1px 浅灰边框。
+4. 所有按钮、输入框、标签、卡片、表格统一视觉语言，不允许每个模块像不同组件库拼出来。
+5. 字体使用现代无衬线系统字体，标题清晰、正文可读、数字突出。
 
-export default function Package3DModal({ 
-  visible, 
-  onClose, 
-  packageOption, 
-  itemSize 
-}: Package3DModalProps) {
-  const [isExploded, setIsExploded] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [explosionProgress, setExplosionProgress] = useState(0);
-  const [assemblyProgress, setAssemblyProgress] = useState(1);
-  const animationRef = useRef<number | null>(null);
+布局要求：
+1. 页面采用专业工作台结构，优先考虑左侧配置区 + 右侧结果区，或者上配置下结果的工程软件布局。
+2. 顶部提供统一工具栏：系统名、当前页面名、方案状态、保存/导出/运行按钮。
+3. 模块之间留足层级和间距，不要拥挤堆叠。
+4. 所有内容左对齐，减少“居中展示页”风格。
 
-  const resetToInitialState = useCallback(() => {
-    setIsExploded(false);
-    setExplosionProgress(0);
-    setAssemblyProgress(1);
-    setIsAnimating(false);
-  }, []);
+参数配置页要求：
+1. 将集装箱信息、商品列表、算法设置拆分为清晰卡片。
+2. 商品列表必须表格化，支持新增、删除、编辑、约束设置。
+3. 算法选择做成单选卡片，包含标题、简介、推荐标识。
+4. 底部放一个强主按钮“开始优化”，按钮占满内容区域宽度。
+5. 输入控件统一高度、边框、圆角和焦点态。
 
-  useEffect(() => {
-    if (visible) {
-      resetToInitialState();
-    }
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [visible, resetToInitialState]);
+结果页要求：
+1. 3D 结果区不要使用纯黑背景，改为深灰蓝或浅灰网格背景，整体更像 CAD / 仿真软件。
+2. 3D 视图需要卡片容器、标题、图例、工具条，避免浮动按钮散乱。
+3. 结果指标使用整齐的信息卡片展示：利用率、已放置数量、未放置数量、耗时、方案编号。
+4. 表格区域要像专业后台表格，支持固定表头、排序、横向滚动和操作列。
+5. 颜色使用严格约束：成功绿、警告橙、错误红、信息蓝，不要高饱和乱配色。
 
-  const handleToggleView = useCallback(() => {
-    if (isAnimating) return;
-    
-    if (!isExploded) {
-      setIsExploded(true);
-      setExplosionProgress(1);
-      setAssemblyProgress(0);
-    } else {
-      setIsExploded(false);
-      setExplosionProgress(0);
-      setAssemblyProgress(1);
-    }
-  }, [isAnimating, isExploded]);
+视觉禁忌：
+1. 禁止大面积紫色渐变背景。
+2. 禁止黑底炫酷风格。
+3. 禁止组件边框过重、阴影过大、圆角不统一。
+4. 禁止按钮和标签颜色过多过杂。
+5. 禁止看起来像临时 demo 或 AI 自动生成页面。
 
-  const handleReset = useCallback(() => {
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-    resetToInitialState();
-  }, [resetToInitialState]);
-
-  const handlePlayAnimation = useCallback(() => {
-    if (isAnimating) return;
-    
-    setIsAnimating(true);
-    setIsExploded(false);
-    setExplosionProgress(0);
-    setAssemblyProgress(1);
-    
-    const explosionDuration = 800;
-    const assemblyDelay = 1000;
-    const assemblyDuration = 2000;
-    const startTime = performance.now();
-    
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      
-      if (elapsed < explosionDuration) {
-        const progress = elapsed / explosionDuration;
-        const easeProgress = 1 - Math.pow(1 - progress, 3);
-        setExplosionProgress(easeProgress);
-        setIsExploded(true);
-        setAssemblyProgress(0);
-        animationRef.current = requestAnimationFrame(animate);
-      } else if (elapsed < explosionDuration + assemblyDelay) {
-        setExplosionProgress(1);
-        setIsExploded(true);
-        setAssemblyProgress(0);
-        animationRef.current = requestAnimationFrame(animate);
-      } else if (elapsed < explosionDuration + assemblyDelay + assemblyDuration) {
-        const assemblyElapsed = elapsed - explosionDuration - assemblyDelay;
-        const progress = assemblyElapsed / assemblyDuration;
-        const easeProgress = 1 - Math.pow(1 - progress, 3);
-        setIsExploded(false);
-        setAssemblyProgress(easeProgress);
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        setIsExploded(false);
-        setAssemblyProgress(1);
-        setExplosionProgress(0);
-        setIsAnimating(false);
-      }
-    };
-    
-    animationRef.current = requestAnimationFrame(animate);
-  }, [isAnimating]);
-
-  if (!packageOption) return null;
-
-  return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          className="package-3d-modal-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-        >
-          <motion.div
-            className="package-3d-modal"
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <div className="modal-title">
-                <Box size={20} />
-                <span>包装方案 3D 预览</span>
-              </div>
-              <button className="modal-close-btn" onClick={onClose}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <div className="viewer-container">
-                <PackageViewer3D
-                  packageOption={packageOption}
-                  itemSize={itemSize}
-                  isExploded={isExploded}
-                  explosionProgress={explosionProgress}
-                  assemblyProgress={assemblyProgress}
-                />
-                
-                <div className="viewer-controls">
-                  <div className="control-group">
-                    <Tooltip title={isExploded ? '切换到合并视图' : '切换到爆炸视图'}>
-                      <div className="view-toggle">
-                        <Layers size={16} />
-                        <span>爆炸视图</span>
-                        <Switch
-                          checked={!isExploded}
-                          onChange={handleToggleView}
-                          disabled={isAnimating}
-                          size="small"
-                        />
-                        <span>合并视图</span>
-                      </div>
-                    </Tooltip>
-                  </div>
-                  
-                  <div className="control-actions">
-                    <Tooltip title="播放装配动画">
-                      <Button
-                        type="primary"
-                        icon={<Play size={14} />}
-                        onClick={handlePlayAnimation}
-                        disabled={isAnimating}
-                        className="action-btn action-btn-primary"
-                      >
-                        播放动画
-                      </Button>
-                    </Tooltip>
-                    <Tooltip title="重置视图">
-                      <Button
-                        icon={<RotateCcw size={14} />}
-                        onClick={handleReset}
-                        disabled={isAnimating}
-                        className="action-btn action-btn-reset"
-                      >
-                        重置
-                      </Button>
-                    </Tooltip>
-                  </div>
-                </div>
-              </div>
-
-              <div className="info-panel">
-                <div className="info-section">
-                  <h4>包装信息</h4>
-                  <div className="info-grid">
-                    <div className="info-item">
-                      <span className="info-label">单包件数</span>
-                      <span className="info-value highlight">{packageOption.itemsPerPackage} 件</span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">包装尺寸</span>
-                      <span className="info-value">
-                        {Math.round(packageOption.packageLength)}×{Math.round(packageOption.packageWidth)}×{Math.round(packageOption.packageHeight)} inch
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">包装重量</span>
-                      <span className="info-value">{(packageOption.packageWeight / 1000).toFixed(2)} kg</span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">单包费用</span>
-                      <span className={`info-value ${packageOption.isOversized ? 'oversized' : ''}`}>
-                        ${packageOption.totalFee.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="info-section">
-                  <h4>商品规格</h4>
-                  <div className="info-grid">
-                    <div className="info-item">
-                      <span className="info-label">商品尺寸</span>
-                      <span className="info-value">{itemSize.length}×{itemSize.width}×{itemSize.height} inch</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="info-section">
-                  <h4>摆放方式</h4>
-                  <div className="placement-info">
-                    {(() => {
-                      const countX = Math.floor(packageOption.packageLength / itemSize.length);
-                      const countY = Math.floor(packageOption.packageHeight / itemSize.height);
-                      const countZ = Math.floor(packageOption.packageWidth / itemSize.width);
-                      return (
-                        <div className="placement-detail">
-                          <span className="placement-text">
-                            长: {countX} 个 × 宽: {countZ} 个 × 高: {countY} 层
-                          </span>
-                          <span className="placement-total">
-                            共计: {countX * countY * countZ} 个位置
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                {packageOption.chargeDetails && packageOption.chargeDetails.length > 0 && (
-                  <div className="info-section">
-                    <h4>费用明细</h4>
-                    <ul className="charge-details">
-                      {packageOption.chargeDetails.map((detail, index) => (
-                        <li key={index}>{detail}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {packageOption.isOversized && (
-                  <div className="oversized-warning-box">
-                    <span className="warning-icon">⚠️</span>
-                    <span>此包装方案会产生超尺寸附加费</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
+最终效果目标：
+让整个系统看起来像专业工业软件、物流优化平台、企业级内部工具，强调稳定、准确、可操作、易阅读。

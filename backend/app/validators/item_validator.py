@@ -2,6 +2,7 @@ from typing import List, Dict, Tuple
 from pydantic import ValidationError
 from app.models.container import ContainerConfig
 from app.models.item import ItemInput
+from app.engine.rotation import get_allowed_orientations
 
 
 def validate_items(items: List[ItemInput], container: ContainerConfig
@@ -21,12 +22,32 @@ def validate_items(items: List[ItemInput], container: ContainerConfig
         else:
             item_ids[item.id] = 1
 
-        max_dim = max(item.length, item.width, item.height)
-        container_min = min(container.length, container.width, container.height)
-        if max_dim > container_min + 0.001:
+        # 检查朝向约束是否矛盾（所有朝向都被排除）
+        allowed = get_allowed_orientations(
+            item.length, item.width, item.height,
+            item.forbidden_horizontal_dims,
+        )
+        if not allowed:
             errors.append(
-                f"商品 '{item.id}' 尺寸 ({max_dim:.0f}mm) "
-                f"超过容器最小维度 ({container_min:.0f}mm)"
+                f"商品 '{item.id}' 的朝向约束矛盾: "
+                f"forbidden_horizontal_dims={item.forbidden_horizontal_dims} "
+                f"导致所有 3 种朝向均被排除（每个维度只能有一个垂直，不能同时禁止两个维度水平）"
+            )
+            continue
+
+        # 检查是否存在至少一种允许的朝向能放进容器
+        can_fit = False
+        for (rot_l, rot_w, rot_h), _, _ in allowed:
+            if (rot_l <= container.length + 0.001
+                    and rot_h <= container.height + 0.001
+                    and rot_w <= container.width + 0.001):
+                can_fit = True
+                break
+        if not can_fit:
+            errors.append(
+                f"商品 '{item.id}' ({item.length}×{item.width}×{item.height}mm) "
+                f"在朝向约束 {item.forbidden_horizontal_dims} 下，"
+                f"所有允许朝向的尺寸均超出容器 ({container.length}×{container.width}×{container.height}mm)"
             )
 
         item_vol = item.length * item.width * item.height * item.quantity

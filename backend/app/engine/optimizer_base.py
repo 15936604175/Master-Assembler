@@ -53,7 +53,12 @@ class OptimizerBase:
         return instances
 
     def _build_rotation_constraints(self):
-        """Pre-compute allowed orientation indices per instance."""
+        """Pre-compute allowed rotation indices per instance.
+
+        Each orientation (e.g. height_vertical) maps to 2 rotations in all_rots
+        (swapping the two horizontal dimensions). We include both so the optimizer
+        can explore the full search space.
+        """
         self.allowed_rotations: List[List[int]] = []
         for inst in self.instances:
             all_rots = get_all_rotations(inst.length, inst.width, inst.height)
@@ -64,9 +69,12 @@ class OptimizerBase:
             allowed_indices = []
             for (rl, rw, rh), _, _ in allowed_orientations:
                 for idx, (al, aw, ah) in enumerate(all_rots):
-                    if abs(al - rl) < 0.01 and abs(aw - rw) < 0.01 and abs(ah - rh) < 0.01:
-                        allowed_indices.append(idx)
-                        break
+                    # Match both (rl, rw, rh) and (rw, rl, rh) — same vertical dim
+                    if (abs(ah - rh) < 0.01 and
+                        ((abs(al - rl) < 0.01 and abs(aw - rw) < 0.01) or
+                         (abs(al - rw) < 0.01 and abs(aw - rl) < 0.01))):
+                        if idx not in allowed_indices:
+                            allowed_indices.append(idx)
             self.allowed_rotations.append(allowed_indices)
 
     def _all_rotations_for(self, inst_idx: int) -> List[Tuple[float, float, float]]:
@@ -75,7 +83,7 @@ class OptimizerBase:
         return get_all_rotations(inst.length, inst.width, inst.height)
 
     def _decode(self, chromosome: List[int]) -> List[Dict]:
-        """Decode chromosome (orientation indices) into placement dicts."""
+        """Decode chromosome (all_rots indices) into placement dicts."""
         packer = EPacker()
         packer.container = (self.container.length, self.container.height, self.container.width)
         packer.container_volume = self.container.length * self.container.height * self.container.width
@@ -83,7 +91,9 @@ class OptimizerBase:
             allowed = self.allowed_rotations[inst_idx]
             if not allowed:
                 continue
-            actual_rot_idx = allowed[orient_idx % len(allowed)]
+            # chromosome stores all_rots indices; ensure it's in allowed list
+            if orient_idx not in allowed:
+                orient_idx = allowed[orient_idx % len(allowed)]
             inst = self.instances[inst_idx]
 
             allowed_orientations = get_allowed_orientations(
@@ -92,7 +102,7 @@ class OptimizerBase:
             )
 
             all_rots = get_all_rotations(inst.length, inst.width, inst.height)
-            rot_l, rot_w, rot_h = all_rots[actual_rot_idx]
+            rot_l, rot_w, rot_h = all_rots[orient_idx]
 
             chosen_orientation = None
             for o in allowed_orientations:
@@ -130,15 +140,23 @@ class OptimizerBase:
         packer.pack(self.container, self.items)
         placements = packer.placements
 
+        # Build a queue of placements per item_id to handle duplicates
+        placement_queue: Dict[str, List[Dict]] = {}
+        for p in placements:
+            iid = p["item_id"]
+            if iid not in placement_queue:
+                placement_queue[iid] = []
+            placement_queue[iid].append(p)
+
         chromosome: List[int] = []
         for inst_idx, inst in enumerate(self.instances):
             all_rots = get_all_rotations(inst.length, inst.width, inst.height)
             rot_l, rot_w, rot_h = inst.length, inst.width, inst.height
 
-            for placed in placements:
-                if placed["item_id"] == inst.item_id:
-                    rot_l, rot_w, rot_h = placed["l"], placed["w"], placed["h"]
-                    break
+            # Pop the next placement for this item_id (handles duplicates correctly)
+            if inst.item_id in placement_queue and placement_queue[inst.item_id]:
+                placed = placement_queue[inst.item_id].pop(0)
+                rot_l, rot_w, rot_h = placed["l"], placed["w"], placed["h"]
 
             rot_idx = 0
             for idx, (al, aw, ah) in enumerate(all_rots):

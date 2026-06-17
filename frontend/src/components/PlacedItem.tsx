@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Text } from '@react-three/drei';
+import { Box, Edges, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Placement } from '../types';
 
@@ -10,124 +10,131 @@ interface PlacedItemProps {
   dimmed?: boolean;
   hidden?: boolean;
   onClick?: (placement: Placement) => void;
+  onDoubleClick?: (placement: Placement) => void;
   itemIndex?: number; // 商品序号（同类商品的第几个）
+  labelVisible?: boolean; // 是否显示编号标签（选中同类商品时为 true）
+  distanceFactor?: number; // Html 标签的缩放因子
 }
 
-export default function PlacedItem({ 
-  placement, 
-  color, 
-  selected, 
-  dimmed, 
-  hidden, 
+export default function PlacedItem({
+  placement,
+  color,
+  selected,
+  dimmed,
+  hidden,
   onClick,
-  itemIndex 
+  onDoubleClick,
+  itemIndex,
+  labelVisible = false,
+  distanceFactor = 200,
 }: PlacedItemProps) {
   const [hovered, setHovered] = useState(false);
 
   if (hidden) return null;
 
-  const opacity = selected ? 1.0 : dimmed ? 0.3 : hovered ? 0.95 : 0.85;
-  const emissive = selected ? new THREE.Color(color) : new THREE.Color('#000000');
+  // 关键修复：dimmed 状态不使用透明度，而是通过颜色变暗来表现
+  // 这样所有物体都是不透明的，彻底避免透明排序导致的深度冲突问题
+  // （透明物体在旋转时排序不稳定，会导致建模闪烁/消失）
+  const opacity = 1.0;
+  const transparent = false;
+
+  // dimmed 时将颜色与 emissive 都压暗，模拟"暗淡"效果
+  const dimFactor = dimmed ? 0.35 : 1.0;
+  const baseColor = new THREE.Color(color).multiplyScalar(dimFactor);
+  const emissive = selected
+    ? new THREE.Color(color)
+    : new THREE.Color('#000000');
   const emissiveIntensity = selected ? 0.4 : 0;
 
-  // 计算商品序号标签
-  const label = itemIndex !== undefined 
-    ? `${placement.item_id} #${itemIndex + 1}` 
-    : placement.item_id;
+  // 商品编号标签：A-01 形式（A 商品的第 1 个）
+  const indexStr =
+    itemIndex !== undefined
+      ? String(itemIndex + 1).padStart(2, '0')
+      : '01';
+  const label = `${placement.item_id}-${indexStr}`;
+
+  // 中心坐标
+  const cx = placement.x + placement.length / 2;
+  const cy = placement.y + placement.height / 2;
+  const cz = placement.z + placement.width / 2;
+
+  // 标签字号根据商品尺寸自适应（避免小商品标签过大遮挡视线）
+  const minDim = Math.min(placement.length, placement.height, placement.width);
+  const fontSize = Math.max(12, Math.min(28, minDim * 0.18));
+
+  // 边框颜色：默认深灰，hover 黑色，选中红色
+  // 关键：边框不使用透明度，避免旋转时透明线框排序不稳定导致闪烁/消失
+  const edgeColor = selected ? '#ff0000' : hovered ? '#000000' : '#1e293b';
 
   return (
     <group>
       {/* 实体盒子 */}
       <Box
-        position={[
-          placement.x + placement.length / 2,
-          placement.y + placement.height / 2,
-          placement.z + placement.width / 2,
-        ]}
+        position={[cx, cy, cz]}
         args={[placement.length, placement.height, placement.width]}
-        onPointerOver={(e) => { 
-          e.stopPropagation(); 
-          setHovered(true); 
-          document.body.style.cursor = 'pointer'; 
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+          document.body.style.cursor = 'pointer';
         }}
-        onPointerOut={() => { 
-          setHovered(false); 
-          document.body.style.cursor = 'auto'; 
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = 'auto';
         }}
-        onClick={(e) => { 
-          e.stopPropagation(); 
-          onClick?.(placement); 
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick?.(placement);
+        }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onDoubleClick?.(placement);
         }}
       >
         <meshStandardMaterial
-          color={color}
+          color={baseColor}
           opacity={opacity}
-          transparent={opacity < 1}
+          transparent={transparent}
           emissive={emissive}
           emissiveIntensity={emissiveIntensity}
-          depthWrite={opacity >= 0.8}
+          depthWrite={true}
           depthTest={true}
           side={THREE.FrontSide}
           roughness={0.4}
           metalness={0.1}
         />
+        {/* 始终显示的边框线，用于区分相邻商品（不透明，避免排序问题） */}
+        <Edges
+          threshold={15}
+          color={edgeColor}
+        />
       </Box>
-      
-      {/* 线框（仅在选中或悬停时显示） */}
-      {(selected || hovered) && (
-        <Box
-          position={[
-            placement.x + placement.length / 2,
-            placement.y + placement.height / 2,
-            placement.z + placement.width / 2,
-          ]}
-          args={[placement.length, placement.height, placement.width]}
+
+      {/* 商品编号标签（仅在选中同类商品时显示） */}
+      {labelVisible && (
+        <Html
+          position={[cx, placement.y + placement.height + fontSize * 0.4, cz]}
+          center
+          distanceFactor={distanceFactor}
+          zIndexRange={[20, 0]}
+          style={{ pointerEvents: 'none' }}
         >
-          <meshBasicMaterial
-            color={selected ? '#ff0000' : '#000000'}
-            wireframe
-            transparent
-            opacity={selected ? 0.9 : 0.5}
-            depthWrite={false}
-            depthTest={true}
-          />
-        </Box>
-      )}
-      
-      {/* 商品标签（始终显示） */}
-      <Text
-        position={[
-          placement.x + placement.length / 2,
-          placement.y + placement.height + 20,
-          placement.z + placement.width / 2,
-        ]}
-        fontSize={15}
-        color={selected ? '#ff0000' : '#333333'}
-        outlineWidth={0.5}
-        outlineColor="#ffffff"
-        anchorX="center"
-        anchorY="bottom"
-      >
-        {label}
-      </Text>
-      
-      {/* 选中时显示详细信息 */}
-      {selected && (
-        <Text
-          position={[
-            placement.x + placement.length / 2,
-            placement.y + placement.height + 50,
-            placement.z + placement.width / 2,
-          ]}
-          fontSize={12}
-          color="#ff0000"
-          outlineWidth={0.3}
-          outlineColor="#ffffff"
-          anchorX="center"
-          anchorY="bottom"
-        >
-          {`位置: (${Math.round(placement.x)}, ${Math.round(placement.y)}, ${Math.round(placement.z)})`}
-        </Text>
+          <div
+            style={{
+              padding: '2px 6px',
+              borderRadius: 4,
+              background: selected ? 'rgba(239,68,68,0.92)' : 'rgba(255,255,255,0.92)',
+              color: selected ? '#fff' : '#0f172a',
+              fontSize: 13,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              border: selected ? '1px solid #dc2626' : '1px solid #cbd5e1',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            }}
+          >
+            {label}
+          </div>
+        </Html>
       )}
     </group>
   );

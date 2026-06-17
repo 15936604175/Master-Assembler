@@ -76,8 +76,10 @@ interface SceneInnerProps {
   selectedId: string | null;
   hiddenIds: Set<string>;
   onSelect: (id: string | null) => void;
+  onToggleHide: (id: string) => void;
   cameraTarget: ViewPreset | null;
   onCameraArrived: () => void;
+  distanceFactor: number;
 }
 
 function SceneInner({
@@ -86,8 +88,10 @@ function SceneInner({
   selectedId,
   hiddenIds,
   onSelect,
+  onToggleHide,
   cameraTarget,
   onCameraArrived,
+  distanceFactor,
 }: SceneInnerProps) {
   const itemColors = useMemo(() => {
     const colorMap: Record<string, string> = {};
@@ -100,7 +104,6 @@ function SceneInner({
     return colorMap;
   }, [result]);
 
-  // 计算每个商品的序号（同类商品的第几个）
   const itemIndices = useMemo(() => {
     if (!result) return new Map<number, number>();
     const indices = new Map<number, number>();
@@ -120,6 +123,13 @@ function SceneInner({
       onSelect(placement.item_id === selectedId ? null : placement.item_id);
     },
     [selectedId, onSelect]
+  );
+
+  const handleDoubleClick = useCallback(
+    (placement: Placement) => {
+      onToggleHide(placement.item_id);
+    },
+    [onToggleHide]
   );
 
   return (
@@ -143,7 +153,10 @@ function SceneInner({
           dimmed={selectedId !== null && selectedId !== p.item_id}
           hidden={hiddenIds.has(p.item_id)}
           onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
           itemIndex={itemIndices.get(i)}
+          labelVisible={selectedId !== null && selectedId === p.item_id}
+          distanceFactor={distanceFactor}
         />
       ))}
       <Grid
@@ -151,10 +164,10 @@ function SceneInner({
         args={[container.length, container.width]}
         cellSize={Math.max(container.length, container.width) / 10}
         cellThickness={0.5}
-        cellColor="#cccccc"
+        cellColor="#cbd5e1"
         sectionSize={Math.max(container.length, container.width) / 2}
         sectionThickness={1}
-        sectionColor="#999999"
+        sectionColor="#94a3b8"
       />
       <OrbitControls
         makeDefault
@@ -174,6 +187,19 @@ export default function Layout3D({ result, container }: Layout3DProps) {
   const [cameraTarget, setCameraTarget] = useState<ViewPreset | null>(null);
   const maxDim = Math.max(container.length, container.height, container.width);
   const camDist = maxDim * 1.5;
+
+  // 双击商品切换该类商品隐藏/显示
+  const toggleHide = useCallback((id: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   const viewPresets = useMemo(
     () => getViewPresets(container.length, container.width, container.height),
@@ -202,67 +228,145 @@ export default function Layout3D({ result, container }: Layout3DProps) {
     setCameraTarget(null);
   };
 
+  const toolBtnStyle: React.CSSProperties = {
+    padding: '6px 12px',
+    fontSize: 12,
+    border: '1px solid #e2e8f0',
+    borderRadius: 6,
+    background: '#fff',
+    color: '#475569',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    fontWeight: 500,
+  };
+
   return (
     <div
       style={{
         width: '100%',
         height: '100%',
         minHeight: 400,
-        background: '#f5f5f5',
+        background: '#e2e8f0',
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <Canvas
-        camera={{
-          position: [camDist * 0.7, camDist * 0.6, camDist * 0.7],
-          fov: 45,
-          near: 10,
-          far: camDist * 10,
-        }}
-        gl={{ 
-          antialias: true,
-          alpha: false,
-          powerPreference: 'high-performance',
-        }}
-        shadows
-      >
-        <Suspense fallback={null}>
-          <SceneInner
-            result={result}
-            container={container}
-            selectedId={selectedId}
-            hiddenIds={hiddenIds}
-            onSelect={setSelectedId}
-            cameraTarget={cameraTarget}
-            onCameraArrived={handleCameraArrived}
-          />
-        </Suspense>
-      </Canvas>
+      {/* 3D 视图工具条 */}
+      <div style={{
+        height: 40,
+        background: '#fff',
+        borderBottom: '1px solid #e2e8f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 12px',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>3D 装配视图</span>
+          <span style={{ fontSize: 11, color: '#94a3b8' }}>
+            {container.length}×{container.width}×{container.height} mm
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {viewPresets.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => handleViewPreset(preset)}
+              style={toolBtnStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1d4ed8'; e.currentTarget.style.color = '#1d4ed8'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569'; }}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <div style={{ width: 1, background: '#e2e8f0', margin: '0 4px' }} />
+          <button
+            onClick={() => {
+              setSelectedId(null);
+              setHiddenIds(new Set());
+            }}
+            style={toolBtnStyle}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1d4ed8'; e.currentTarget.style.color = '#1d4ed8'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569'; }}
+          >
+            重置
+          </button>
+          <button
+            onClick={() => {
+              if (selectedId) {
+                setHiddenIds(new Set(itemIds.filter((id) => id !== selectedId)));
+              }
+            }}
+            style={{
+              ...toolBtnStyle,
+              background: selectedId ? '#eff6ff' : '#fff',
+              borderColor: selectedId ? '#1d4ed8' : '#e2e8f0',
+              color: selectedId ? '#1d4ed8' : '#475569',
+            }}
+          >
+            仅显示选中
+          </button>
+        </div>
+      </div>
 
-      {result && (
-        <>
+      {/* Canvas 区域 */}
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+        <Canvas
+          camera={{
+            position: [camDist * 0.7, camDist * 0.6, camDist * 0.7],
+            fov: 45,
+            near: 10,
+            far: camDist * 10,
+          }}
+          gl={{ 
+            antialias: true,
+            alpha: false,
+            powerPreference: 'high-performance',
+          }}
+          shadows
+        >
+          <Suspense fallback={null}>
+            <SceneInner
+              result={result}
+              container={container}
+              selectedId={selectedId}
+              hiddenIds={hiddenIds}
+              onSelect={setSelectedId}
+              onToggleHide={toggleHide}
+              cameraTarget={cameraTarget}
+              onCameraArrived={handleCameraArrived}
+              distanceFactor={maxDim * 0.8}
+            />
+          </Suspense>
+        </Canvas>
+
+        {/* 图例面板 */}
+        {result && itemIds.length > 0 && (
           <div
             style={{
               position: 'absolute',
               top: 12,
               right: 12,
-              background: 'rgba(255,255,255,0.95)',
+              background: 'rgba(255,255,255,0.96)',
               borderRadius: 8,
-              padding: 8,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              minWidth: 140,
+              padding: '10px 12px',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              border: '1px solid #e2e8f0',
+              minWidth: 160,
               zIndex: 10,
             }}
           >
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 'bold',
-                marginBottom: 6,
-                color: '#666',
-              }}
-            >
-              商品列表
+            <div style={{
+              fontSize: 12,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: '#0f172a',
+              borderBottom: '1px solid #e2e8f0',
+              paddingBottom: 6,
+            }}>
+              商品图例
             </div>
             {itemIds.map((id, i) => (
               <div
@@ -270,11 +374,11 @@ export default function Layout3D({ result, container }: Layout3DProps) {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '2px 0',
+                  gap: 8,
+                  padding: '3px 0',
                   cursor: 'pointer',
                   opacity: hiddenIds.has(id) ? 0.4 : 1,
-                  fontWeight: selectedId === id ? 'bold' : 'normal',
+                  fontWeight: selectedId === id ? 600 : 400,
                 }}
                 onClick={() => {
                   setSelectedId(selectedId === id ? null : id);
@@ -282,23 +386,24 @@ export default function Layout3D({ result, container }: Layout3DProps) {
               >
                 <div
                   style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: 2,
+                    width: 14,
+                    height: 14,
+                    borderRadius: 3,
                     background: COLORS[i % COLORS.length],
-                    border: selectedId === id ? '2px solid #333' : 'none',
+                    border: selectedId === id ? '2px solid #0f172a' : '1px solid #cbd5e1',
                   }}
                 />
-                <span style={{ fontSize: 12 }}>{id}</span>
+                <span style={{ fontSize: 12, color: '#334155' }}>{id}</span>
                 <button
                   style={{
                     marginLeft: 'auto',
-                    fontSize: 10,
-                    border: '1px solid #ccc',
-                    borderRadius: 3,
+                    fontSize: 11,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 4,
                     background: '#fff',
+                    color: '#64748b',
                     cursor: 'pointer',
-                    padding: '0 4px',
+                    padding: '1px 6px',
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -310,75 +415,8 @@ export default function Layout3D({ result, container }: Layout3DProps) {
               </div>
             ))}
           </div>
-
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 12,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              gap: 6,
-              zIndex: 10,
-              background: 'rgba(255,255,255,0.95)',
-              padding: 8,
-              borderRadius: 8,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            }}
-          >
-            {viewPresets.map((preset) => (
-              <button
-                key={preset.id}
-                onClick={() => handleViewPreset(preset)}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: 12,
-                  border: '1px solid #ccc',
-                  borderRadius: 6,
-                  background: '#fff',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {preset.label}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                setSelectedId(null);
-                setHiddenIds(new Set());
-              }}
-              style={{
-                padding: '6px 12px',
-                fontSize: 12,
-                border: '1px solid #ccc',
-                borderRadius: 6,
-                background: '#fff',
-                cursor: 'pointer',
-              }}
-            >
-              重置
-            </button>
-            <button
-              onClick={() => {
-                if (selectedId) {
-                  setHiddenIds(new Set(itemIds.filter((id) => id !== selectedId)));
-                }
-              }}
-              style={{
-                padding: '6px 12px',
-                fontSize: 12,
-                border: '1px solid #ccc',
-                borderRadius: 6,
-                background: selectedId ? '#e6f7ff' : '#fff',
-                cursor: 'pointer',
-              }}
-            >
-              仅显示选中
-            </button>
-          </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
