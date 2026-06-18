@@ -58,10 +58,7 @@ def test_evaluate_placement_returns_metrics():
     assert isinstance(score, float)
     assert score > 0
     assert "blf_score" in metrics
-    assert "support_ratio" in metrics
-    assert "cg_score" in metrics
-    assert "is_supported" in metrics
-    assert "is_cg_ok" in metrics
+    assert "wall_bonus" in metrics
 
 
 def test_check_overlap_no_overlap():

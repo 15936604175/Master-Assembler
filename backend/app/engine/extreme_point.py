@@ -145,71 +145,38 @@ def evaluate_placement(ep: ExtremePoint, item_size: Tuple[float, float, float],
                        existing_placements: List[Dict],
                        weight: float = 1.0,
                        is_fragile: bool = False) -> Tuple[float, Dict]:
+    """评估放置位置得分（空间利用率最优版本）。
+
+    优化点：
+    - 移除 O(N) 的 cg_score / gravity_score / fragile_safe / adj_score 计算
+    - 仅保留 O(1) 的 BLF（Bottom-Left-Fill）评分
+    - 不考虑重量平衡和稳定性约束
+    """
     ex, ey, ez = ep
     il, ih, iw = item_size
     cl, ch, cw = container
 
-    support_ratio, is_supported = check_support(
-        ex, ey, ez, il, ih, iw, existing_placements
-    )
+    # BLF 评分：优先填底部、左部、后部，O(1) 复杂度
+    if cl > 0 and ch > 0 and cw > 0:
+        blf_score = 1.0 - (ey / ch * 0.5 + ex / cl * 0.3 + ez / cw * 0.2)
+        blf_score = max(0.0, min(1.0, blf_score))
+    else:
+        blf_score = 1.0
 
-    cg_score, is_cg_ok = check_cg_stability(
-        ex, ey, ez, il, ih, iw, weight, existing_placements, container
-    )
+    # 紧贴容器壁奖励：物品贴边时给予小幅加分，鼓励规则堆叠
+    wall_bonus = 0.0
+    if ex <= 0.01 or ex + il >= cl - 0.01:
+        wall_bonus += 0.05
+    if ez <= 0.01 or ez + iw >= cw - 0.01:
+        wall_bonus += 0.05
+    if ey <= 0.01:
+        wall_bonus += 0.05
 
-    fragile_safe = 1.0
-    if not is_fragile:
-        fragile_safe, _ = check_fragile_safety(
-            ex, ey, ez, il, ih, iw, weight, existing_placements
-        )
-
-    w1, w2, w3, w4, w5 = 0.30, 0.25, 0.02, 0.10, 0.08
-
-    blf_score = 1.0 - (ey / ch * 0.5 + ex / cl * 0.3 + ez / cw * 0.2) if cl > 0 and ch > 0 and cw > 0 else 1.0
-    blf_score = max(0.0, min(1.0, blf_score))
-
-    gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
-
-    adj_score = 0.0
-    if existing_placements:
-        contact_area = 0.0
-        item_footprint = il * iw
-        for p in existing_placements:
-            px, py, pz = p["x"], p["y"], p["z"]
-            pl, ph, pw = p["l"], p["h"], p["w"]
-
-            overlap_x = max(0, min(ex + il, px + pl) - max(ex, px))
-            overlap_z = max(0, min(ez + iw, pz + pw) - max(ez, pz))
-            contact_xy = max(0, min(ex + il, px + pl) - max(ex, px))
-            contact_yz = max(0, min(ey + ih, py + ph) - max(ey, py))
-
-            if abs(ey - (py + ph)) <= VERTICAL_TOLERANCE:
-                contact_area += overlap_x * overlap_z
-            elif abs((ey + ih) - py) <= VERTICAL_TOLERANCE:
-                contact_area += overlap_x * overlap_z
-            elif abs(ex - (px + pl)) <= VERTICAL_TOLERANCE or abs((ex + il) - px) <= VERTICAL_TOLERANCE:
-                contact_area += contact_yz * overlap_z
-            elif abs(ez - (pz + pw)) <= VERTICAL_TOLERANCE or abs((ez + iw) - pz) <= VERTICAL_TOLERANCE:
-                contact_area += contact_xy * contact_yz
-
-        if item_footprint > 0:
-            adj_score = min(contact_area / item_footprint, 1.0)
-
-    total_score = (w1 * blf_score
-                   + w2 * support_ratio
-                   + w3 * cg_score
-                   + w4 * gravity_score
-                   + w5 * fragile_safe
-                   + 0.25 * adj_score)
+    total_score = blf_score + wall_bonus
 
     metrics = {
         "blf_score": round(blf_score, 4),
-        "support_ratio": support_ratio,
-        "cg_score": cg_score,
-        "gravity_score": round(gravity_score, 4),
-        "fragile_safe": round(fragile_safe, 4),
-        "is_supported": is_supported,
-        "is_cg_ok": is_cg_ok,
+        "wall_bonus": round(wall_bonus, 4),
     }
 
     return round(total_score, 4), metrics
@@ -220,33 +187,23 @@ def evaluate_placement_fast(ep: ExtremePoint, item_size: Tuple[float, float, flo
                              existing_placements: List[Dict],
                              weight: float = 1.0,
                              is_fragile: bool = False) -> float:
+    """快速评估放置位置得分（与 evaluate_placement 一致，O(1) 复杂度）。"""
     ex, ey, ez = ep
     il, ih, iw = item_size
     cl, ch, cw = container
 
-    support_ratio, is_supported = check_support(
-        ex, ey, ez, il, ih, iw, existing_placements
-    )
+    if cl > 0 and ch > 0 and cw > 0:
+        blf_score = 1.0 - (ey / ch * 0.5 + ex / cl * 0.3 + ez / cw * 0.2)
+        blf_score = max(0.0, min(1.0, blf_score))
+    else:
+        blf_score = 1.0
 
-    cg_score, is_cg_ok = check_cg_stability(
-        ex, ey, ez, il, ih, iw, weight, existing_placements, container
-    )
+    wall_bonus = 0.0
+    if ex <= 0.01 or ex + il >= cl - 0.01:
+        wall_bonus += 0.05
+    if ez <= 0.01 or ez + iw >= cw - 0.01:
+        wall_bonus += 0.05
+    if ey <= 0.01:
+        wall_bonus += 0.05
 
-    fragile_safe = 1.0
-    if not is_fragile:
-        fragile_safe, _ = check_fragile_safety(
-            ex, ey, ez, il, ih, iw, weight, existing_placements
-        )
-
-    blf_score = 1.0 - (ey / ch * 0.5 + ex / cl * 0.3 + ez / cw * 0.2) if cl > 0 and ch > 0 and cw > 0 else 1.0
-    blf_score = max(0.0, min(1.0, blf_score))
-
-    gravity_score = 1.0 - (ey / ch) if ch > 0 else 1.0
-
-    total_score = (0.35 * blf_score
-                   + 0.25 * support_ratio
-                   + 0.05 * cg_score
-                   + 0.15 * gravity_score
-                   + 0.15 * fragile_safe)
-
-    return round(total_score, 4)
+    return round(blf_score + wall_bonus, 4)

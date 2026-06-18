@@ -90,6 +90,12 @@ class OptimizerBase:
         packer.container_volume = self.container.length * self.container.height * self.container.width
         packer.max_weight = self.container.max_weight
         packer.placements = []
+        # 初始化网格索引（与 EPacker.pack 保持一致）
+        cl, ch, cw = packer.container
+        packer._grid_cell_size = max(max(cl, ch, cw) / 10.0, 50.0)
+        packer._grid = {}
+        packer._visit_version = 0
+        packer._visits = []
         packer.extreme_points = _generate_floor_eps(
             self.container.length, self.container.height, self.container.width,
             grid_step=max(300.0, self.container.length / 10)
