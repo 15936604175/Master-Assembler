@@ -69,5 +69,6 @@ class MultiOptimizeResponse(BaseModel):
     pareto_solutions: Optional[List[OptimizeResponse]] = None
     ga_solution: Optional[OptimizeResponse] = None
     ls_solution: Optional[OptimizeResponse] = None
+    block_solution: Optional[OptimizeResponse] = None
     algorithm_time_ms: float
     pareto_count: int = 0

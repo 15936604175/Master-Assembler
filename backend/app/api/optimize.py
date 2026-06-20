@@ -181,18 +181,46 @@ async def optimize(request: OptimizeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/optimize-block", response_model=OptimizeResponse)
+async def optimize_block(request: OptimizeRequest):
+    """Block 块状优化接口（独立调用）。"""
+    try:
+        is_valid, errors = validate_request(request.container, request.items)
+        if not is_valid:
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "输入数据验证失败", "errors": errors},
+            )
+        from app.engine.block_optimizer import BlockOptimizer
+        start = time.time()
+        block_packer = BlockOptimizer()
+        placements = block_packer.pack(request.container, request.items)
+        elapsed = (time.time() - start) * 1000
+        response = _build_response_from_dicts(
+            request.container, request.items, placements, "block", round(elapsed, 2)
+        )
+        if response is None:
+            raise HTTPException(status_code=500, detail="Block 优化未生成有效方案")
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/optimize-phase2", response_model=MultiOptimizeResponse)
 async def optimize_phase2(
     request: OptimizeRequest,
     enable_ga: bool = Query(True, description="启用遗传算法优化"),
     enable_ls: bool = Query(True, description="启用局部搜索优化"),
     enable_pareto: bool = Query(False, description="启用帕累托优化"),
+    enable_block: bool = Query(True, description="启用 Block 块状优化"),
     timeout_seconds: int = Query(120, description="超时时间（秒）"),
 ):
     """
     Phase 2 多算法优化接口。
 
-    同时运行贪心、遗传算法、局部搜索和帕累托优化，返回多个方案供选择。
+    同时运行贪心、Block 优化、遗传算法、局部搜索和帕累托优化，返回多个方案供选择。
     """
     try:
         is_valid, errors = validate_request(request.container, request.items)
@@ -223,10 +251,31 @@ async def optimize_phase2(
                 primary=greedy_response,
                 ga_solution=None,
                 ls_solution=None,
+                block_solution=None,
                 pareto_solutions=None,
                 algorithm_time_ms=round(elapsed * 1000, 2),
                 pareto_count=0,
             )
+
+        # 1.5 Block Optimization
+        block_response = None
+        if enable_block:
+            elapsed = time.time() - total_start
+            if elapsed > timeout_seconds:
+                logger.warning("超时，跳过 Block 优化")
+            else:
+                logger.info("运行 Block 块状优化...")
+                from app.engine.block_optimizer import BlockOptimizer
+                block_start = time.time()
+                block_packer = BlockOptimizer()
+                block_placements = block_packer.pack(request.container, request.items)
+                block_elapsed = (time.time() - block_start) * 1000
+                if block_placements:
+                    block_response = _build_response_from_dicts(
+                        request.container, request.items, block_placements,
+                        "block", round(block_elapsed, 2)
+                    )
+                    logger.info(f"Block 优化完成，利用率: {block_response.container_utilization:.2%}")
 
         # 2. Genetic Algorithm
         ga_response = None
@@ -305,6 +354,7 @@ async def optimize_phase2(
             primary=greedy_response,
             ga_solution=ga_response,
             ls_solution=ls_response,
+            block_solution=block_response,
             pareto_solutions=pareto_responses if pareto_responses else None,
             algorithm_time_ms=round(total_elapsed, 2),
             pareto_count=pareto_count,

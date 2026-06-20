@@ -10,6 +10,7 @@ interface ResultPanelProps {
 
 const SOLUTION_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   greedy: { label: '贪心', color: 'blue' },
+  block: { label: 'Block优化', color: 'purple' },
   ga: { label: '遗传算法', color: 'green' },
   ls: { label: '局部搜索', color: 'cyan' },
   pareto: { label: '帕累托', color: 'orange' },
@@ -188,6 +189,17 @@ export default function ResultPanel({ result, multiResult, onSelectResult }: Res
               贪心 ({(multiResult.primary.container_utilization * 100).toFixed(1)}%)
             </Tag>
           </Tooltip>
+          {multiResult.block_solution && (
+            <Tooltip title="Block块状优化（企业级引擎）">
+              <Tag
+                color={result === multiResult.block_solution ? 'purple' : 'default'}
+                onClick={() => onSelectResult?.(multiResult.block_solution!)}
+                style={{ cursor: 'pointer' }}
+              >
+                Block ({(multiResult.block_solution.container_utilization * 100).toFixed(1)}%)
+              </Tag>
+            </Tooltip>
+          )}
           {multiResult.ga_solution && (
             <Tooltip title="遗传算法优化">
               <Tag

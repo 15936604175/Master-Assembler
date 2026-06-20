@@ -4,10 +4,10 @@ import { PlayCircleOutlined } from '@ant-design/icons';
 import ContainerConfig from './ContainerConfig';
 import ItemListEditor from './ItemListEditor';
 import type { ItemRow } from './ItemListEditor';
-import { optimize, optimizePhase2 } from '../services/api';
+import { optimize, optimizeBlock, optimizePhase2 } from '../services/api';
 import type { OptimizeResponse, MultiOptimizeResponse, ContainerConfig as ContainerConfigType, ItemInput } from '../types';
 
-type Algorithm = 'greedy' | 'phase2';
+type Algorithm = 'greedy' | 'block' | 'phase2';
 
 interface ControlPanelProps {
   onResult: (result: OptimizeResponse) => void;
@@ -21,7 +21,7 @@ export default function ControlPanel({ onResult, onMultiResult, onLoading }: Con
   });
   const [items, setItems] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [algorithm, setAlgorithm] = useState<Algorithm>('phase2');
+  const [algorithm, setAlgorithm] = useState<Algorithm>('block');
 
   const buildItems = (): ItemInput[] =>
     items.map((item) => ({
@@ -54,10 +54,14 @@ export default function ControlPanel({ onResult, onMultiResult, onLoading }: Con
         onMultiResult?.(result);
         onResult(result.primary);
         message.success(`优化完成 (${result.pareto_count} 个帕累托方案，耗时 ${result.algorithm_time_ms}ms)`);
+      } else if (algorithm === 'block') {
+        const result = await optimizeBlock({ container, items: inputItems });
+        onResult(result);
+        message.success(`Block 优化完成 (利用率 ${(result.container_utilization * 100).toFixed(1)}%，耗时 ${result.stats.algorithm_time_ms}ms)`);
       } else {
         const result = await optimize({ container, items: inputItems });
         onResult(result);
-        message.success('优化完成');
+        message.success('贪心优化完成');
       }
     } catch (err) {
       message.error('优化请求失败，请检查后端服务是否启动');
@@ -77,10 +81,16 @@ export default function ControlPanel({ onResult, onMultiResult, onLoading }: Con
         style={{ marginBottom: 8, display: 'block' }}
       >
         <Space direction="vertical">
+          <Radio value="block">
+            <strong>Block 块状优化</strong>
+            <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>
+              企业级引擎（推荐）
+            </span>
+          </Radio>
           <Radio value="phase2">
             <strong>Phase 2 智能优化</strong>
             <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>
-              GA + 局部搜索 + 帕累托
+              GA + 局部搜索 + 帕累托 + Block
             </span>
           </Radio>
           <Radio value="greedy">

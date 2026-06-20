@@ -93,6 +93,7 @@ export interface MultiOptimizeResponse {
   pareto_solutions?: OptimizeResponse[];
   ga_solution?: OptimizeResponse;
   ls_solution?: OptimizeResponse;
+  block_solution?: OptimizeResponse;
   algorithm_time_ms: number;
   pareto_count: number;
 }
