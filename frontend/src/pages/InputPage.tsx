@@ -1,21 +1,20 @@
 import { useState } from 'react';
 import { Button, Card, message, Radio, Space, Typography, Tooltip } from 'antd';
-import { PlayCircleOutlined, ThunderboltOutlined, BulbOutlined, EyeOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, ThunderboltOutlined, BulbOutlined, EyeOutlined } from '@ant-design/icons';
 import ContainerConfig from '../components/ContainerConfig';
 import ItemListEditor from '../components/ItemListEditor';
 import type { ItemRow } from '../components/ItemListEditor';
 import BoxLoader from '../components/BoxLoader';
-import { optimize, optimizeBlock, optimizePhase2 } from '../services/api';
-import type { OptimizeResponse, MultiOptimizeResponse, ContainerConfig as ContainerConfigType, ItemInput } from '../types';
+import { optimizeBlock, optimizeAdvancedBlock } from '../services/api';
+import type { OptimizeResponse, ContainerConfig as ContainerConfigType, ItemInput } from '../types';
 
 const { Title, Text } = Typography;
 
-type Algorithm = 'block' | 'greedy' | 'phase2';
+type Algorithm = 'advanced_block' | 'block';
 
 interface InputPageProps {
   onOptimizeComplete: (
     result: OptimizeResponse,
-    multiResult?: MultiOptimizeResponse | null,
     container?: ContainerConfigType
   ) => void;
   container: ContainerConfigType;
@@ -25,7 +24,6 @@ interface InputPageProps {
   algorithm: Algorithm;
   setAlgorithm: (v: Algorithm) => void;
   existingResult?: OptimizeResponse | null;
-  existingMultiResult?: MultiOptimizeResponse | null;
 }
 
 export default function InputPage({
@@ -37,7 +35,6 @@ export default function InputPage({
   algorithm,
   setAlgorithm,
   existingResult,
-  existingMultiResult,
 }: InputPageProps) {
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('正在优化装配方案...');
@@ -70,30 +67,21 @@ export default function InputPage({
     }
 
     setLoading(true);
-    if (algorithm === 'phase2') {
-      setLoadingText('Phase 2 智能优化中，预计 30-60 秒...');
-    } else if (algorithm === 'block') {
-      setLoadingText('Block 块状优化中...');
+    if (algorithm === 'advanced_block') {
+      setLoadingText('高级 Block 优化中（Batch Corridor + Beam Search）...');
     } else {
-      setLoadingText('正在计算装配方案...');
+      setLoadingText('Block 块状优化中...');
     }
     try {
       const inputItems = buildItems();
-      if (algorithm === 'phase2') {
-        const result = await optimizePhase2(
-          { container, items: inputItems },
-          { timeout_seconds: 60 }
-        );
-        onOptimizeComplete(result.primary, result, container);
-        message.success(`优化完成 (${result.pareto_count} 个帕累托方案，耗时 ${result.algorithm_time_ms}ms)`);
-      } else if (algorithm === 'block') {
-        const result = await optimizeBlock({ container, items: inputItems });
-        onOptimizeComplete(result, null, container);
-        message.success(`Block 优化完成 (利用率 ${(result.container_utilization * 100).toFixed(1)}%，耗时 ${result.stats.algorithm_time_ms}ms)`);
+      if (algorithm === 'advanced_block') {
+        const result = await optimizeAdvancedBlock({ container, items: inputItems });
+        onOptimizeComplete(result, container);
+        message.success(`高级 Block 优化完成 (利用率 ${(result.container_utilization * 100).toFixed(1)}%，耗时 ${result.stats.algorithm_time_ms}ms)`);
       } else {
-        const result = await optimize({ container, items: inputItems });
-        onOptimizeComplete(result, null, container);
-        message.success('优化完成');
+        const result = await optimizeBlock({ container, items: inputItems });
+        onOptimizeComplete(result, container);
+        message.success(`Block 优化完成 (利用率 ${(result.container_utilization * 100).toFixed(1)}%，耗时 ${result.stats.algorithm_time_ms}ms)`);
       }
     } catch (err: unknown) {
       const error = err as Error;
@@ -127,7 +115,7 @@ export default function InputPage({
   // 查看上次优化结果（不重新计算）
   const handleViewExisting = () => {
     if (existingResult) {
-      onOptimizeComplete(existingResult, existingMultiResult, container);
+      onOptimizeComplete(existingResult, container);
     }
   };
 
@@ -237,6 +225,36 @@ export default function InputPage({
                     display: 'flex',
                     alignItems: 'flex-start',
                     padding: 14,
+                    border: algorithm === 'advanced_block' ? '2px solid #059669' : '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    background: algorithm === 'advanced_block' ? '#ecfdf5' : '#fff',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Radio value="advanced_block" style={{ marginTop: 2 }} />
+                  <div style={{ flex: 1, marginLeft: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <ThunderboltOutlined style={{ color: '#059669' }} />
+                      <strong style={{ fontSize: 15, color: '#0f172a' }}>高级 Block 优化</strong>
+                      <span style={{
+                        fontSize: 11, padding: '1px 6px', borderRadius: 4,
+                        background: '#d1fae5', color: '#059669', fontWeight: 500,
+                      }}>
+                        推荐
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>
+                      企业级 V2：Batch Corridor 动态走廊 + Target Center + Sequence Penalty + Beam Search，自动形成正确批次顺序
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    padding: 14,
                     border: algorithm === 'block' ? '2px solid #7c3aed' : '1px solid #e2e8f0',
                     borderRadius: 8,
                     cursor: 'pointer',
@@ -247,65 +265,11 @@ export default function InputPage({
                   <Radio value="block" style={{ marginTop: 2 }} />
                   <div style={{ flex: 1, marginLeft: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <ThunderboltOutlined style={{ color: '#7c3aed' }} />
+                      <BulbOutlined style={{ color: '#7c3aed' }} />
                       <strong style={{ fontSize: 15, color: '#0f172a' }}>Block 块状优化</strong>
-                      <span style={{
-                        fontSize: 11, padding: '1px 6px', borderRadius: 4,
-                        background: '#ede9fe', color: '#7c3aed', fontWeight: 500,
-                      }}>
-                        推荐
-                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>
-                      企业级引擎：同SKU聚集 + 物理稳定性 + 批次分层 + Beam Search，速度快利用率高
-                    </div>
-                  </div>
-                </label>
-
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    padding: 14,
-                    border: algorithm === 'phase2' ? '2px solid #1d4ed8' : '1px solid #e2e8f0',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    background: algorithm === 'phase2' ? '#eff6ff' : '#fff',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  <Radio value="phase2" style={{ marginTop: 2 }} />
-                  <div style={{ flex: 1, marginLeft: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <BulbOutlined style={{ color: '#1d4ed8' }} />
-                      <strong style={{ fontSize: 15, color: '#0f172a' }}>Phase 2 智能优化</strong>
-                    </div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>
-                      遗传算法 + 局部搜索 + 帕累托多目标优化，提供多个优化方案供对比选择
-                    </div>
-                  </div>
-                </label>
-
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    padding: 14,
-                    border: algorithm === 'greedy' ? '2px solid #1d4ed8' : '1px solid #e2e8f0',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    background: algorithm === 'greedy' ? '#eff6ff' : '#fff',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  <Radio value="greedy" style={{ marginTop: 2 }} />
-                  <div style={{ flex: 1, marginLeft: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <InfoCircleOutlined style={{ color: '#64748b' }} />
-                      <strong style={{ fontSize: 15, color: '#0f172a' }}>Phase 1 贪心算法</strong>
-                    </div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>
-                      快速基本优化，适合大量商品场景
+                      V1 基础版：同SKU聚集 + 物理稳定性 + 批次分层，速度快利用率高
                     </div>
                   </div>
                 </label>

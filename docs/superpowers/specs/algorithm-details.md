@@ -11,7 +11,9 @@
         ▼
   ┌─ Phase 1: 贪心算法 (EPacker)      ← 快速基线解
   │
-  ├─ Phase 1.5: Block 块状优化          ← 企业级引擎：Block Packing + Beam Search + 物理稳定性 + 批次分层
+  ├─ Phase 1.5: Block 块状优化 (V1)    ← 企业级引擎：Block Packing + Beam Search + 物理稳定性 + 批次分层
+  │
+  ├─ Phase 1.6: 高级 Block 优化 (V2)   ← V2 增强：Batch Corridor + Target Center + Sequence Penalty
   │
   ├─ Phase 2: 遗传算法 (GA)            ← 以贪心解为种子进化
   │
@@ -405,6 +407,129 @@ Block 优化输出与贪心算法完全一致的 placement 格式，复用 `_bui
 
 ---
 
+## 2A. 高级 Block 优化 (AdvancedBlockOptimizer) — V2 企业级增强版
+
+**文件：** `backend/app/engine/advanced_block_optimizer.py`
+
+### 2A.1 核心思想：从硬切分到软约束引导
+
+V1 的 `BatchManager` 采用**硬编码位置偏好**（batch0 靠出口、batch≥2 靠内部），在货量比例不均时会导致空间浪费。V2 引入 **Batch Corridor + Target Center + Sequence Penalty** 三件套，通过**软约束评分**引导 Beam Search 自然形成正确批次顺序，而非刚性切区。
+
+```
+V1 硬切分（货量不均时浪费空间）:
+|  Batch0  |  Batch1  |  Batch2  |
+   2m³        30m³       10m³     ← 平均划分导致 Batch0/Batch2 区域空置
+
+V2 动态走廊（根据货量比例分配 + 20% 缓冲重叠）:
+|Batch0|←→|     Batch1     |←→|  Batch2  |
+ 0~1440  0~9840  7680~12000         ← 走廊重叠避免硬边界
+```
+
+### 2A.2 核心创新（相比 V1）
+
+| 创新点 | V1 做法 | V2 做法 |
+|--------|---------|---------|
+| **批次区域** | 硬编码位置偏好（batch0 靠出口） | 动态走廊（按货量比例分配 + 20% 缓冲重叠） |
+| **顺序引导** | 位置偏好评分 | Target Center + Sequence Penalty（偏离目标重心越远罚分越大） |
+| **越界处理** | 无 | Corridor Penalty（超出走廊按距离惩罚） |
+| **顺序颠倒** | 无 | Order Violation Penalty（高 batch 在低 batch 之前则重罚） |
+| **批次聚集** | 无 | Batch Compactness Reward（同 batch 聚集度奖励） |
+| **Beam 宽度** | 10 | 20（更广探索） |
+
+### 2A.3 Batch Corridor 动态走廊计算
+
+```python
+# 输入：各 batch 总体积
+batch_volumes = {0: 5m³, 1: 30m³, 2: 15m³}  # 总计 50m³
+
+# 计算比例
+ratio = batch_volume / total_volume
+# Batch0: 10%, Batch1: 60%, Batch2: 30%
+
+# 分配容器长度（containerLength=12000）
+expected_length = ratio × containerLength
+# Batch0: 1200, Batch1: 7200, Batch2: 3600
+
+# 加入 20% 缓冲扩展（允许重叠）
+expansion = expected_length × 0.20
+# Batch0: 0~1440, Batch1: 0~9840, Batch2: 7680~12000
+
+# 目标重心 = 走廊中心
+target_center_x = (cumulative_x + cumulative_x + expected_length) / 2
+# Batch0: 600, Batch1: 4800, Batch2: 10200
+```
+
+**关键特性：**
+- 走廊允许重叠（20% 缓冲），避免硬边界导致空间浪费
+- 目标重心用于引导搜索，不是强制约束
+- 小 batch 不会占据过大区域，大 batch 有足够空间
+
+### 2A.4 综合评分函数（8 维度加权）
+
+```python
+score = + 100 × supportScore          # 支撑率
+        + 80  × utilizationScore      # 体积利用率
+        + 60  × wallContactScore      # 墙面接触
+        + 50  × sameSkuClusterScore   # 同SKU聚集
+        + 40  × batchCompactnessScore # 批次紧凑度奖励
+        - 60  × sequencePenalty       # 顺序偏离惩罚（偏离 target_center）
+        - 80  × corridorPenalty       # 走廊越界惩罚（超出 corridor 范围）
+        - 100 × orderViolationPenalty # 批次顺序颠倒惩罚（高batch在低batch之前）
+        - 50  × fragmentationPenalty  # 碎片化惩罚
+```
+
+**惩罚计算细节：**
+
+| 惩罚项 | 计算方式 | 归一化 |
+|--------|----------|--------|
+| sequencePenalty | `|block_center_x - target_center_x|` | / (container_length / 2) |
+| corridorPenalty | 超出走廊的距离 | / container_length |
+| orderViolation | 高batch中心X < 低batch中心X 的距离差 | / container_length |
+
+### 2A.5 策略选择
+
+```python
+if total_items <= 500:
+    # 中小场景：Beam Search（beam_width=20, max_steps=150）
+    solver = AdvancedBeamSearchSolver(...)
+    best_state = solver.solve(beam_width=20, max_steps=150)
+else:
+    # 大场景：贪心 + 批次走廊评分（性能优先）
+    return self._greedy_pack_with_corridor(...)
+```
+
+### 2A.6 验证结果
+
+**测试场景：** 3 batch × 10/20/10 件（600×400×300），容器 12000×2352×2395
+
+| Batch | 货量 | Target Center | 实际平均 X | 状态 |
+|-------|------|---------------|-----------|------|
+| Batch0 | 10 | 600 | 960 | ✓ 靠前 |
+| Batch1 | 20 | 4800 | 3900 | ✓ 居中 |
+| Batch2 | 10 | 10200 | 10620 | ✓ 靠后 |
+
+**顺序完全正确：** Batch0 (960) ≤ Batch1 (3900) ≤ Batch2 (10620)
+
+### 2A.7 与 V1 对比
+
+| 维度 | V1 BlockOptimizer | V2 AdvancedBlockOptimizer |
+|------|-------------------|--------------------------|
+| **批次顺序** | 硬编码位置偏好 | 动态走廊 + 目标重心 + 顺序惩罚 |
+| **货量适应** | 固定区域 | 按比例动态分配 |
+| **边界处理** | 硬边界 | 软约束（20% 缓冲重叠） |
+| **Beam 宽度** | 10 | 20 |
+| **评分维度** | 9 维 | 8 维（增加批次紧凑度，移除重心偏移） |
+| **适用场景** | 通用 | 多批次、货量不均的场景 |
+
+### 2A.8 API 调用
+
+```python
+# V2 高级 Block 优化（推荐用于多批次场景）
+POST /api/optimize-advanced-block
+```
+
+---
+
 ## 3. 共享基类 (OptimizerBase)
 
 **文件：** `backend/app/engine/optimizer_base.py`
@@ -740,22 +865,23 @@ VerificationReport
 
 ## 8. 算法对比总结
 
-| 维度 | 贪心 (Greedy) | Block 优化 | 遗传算法 (GA) | 局部搜索 (LS) | 帕累托 (NSGA-II) |
-|------|--------------|-----------|--------------|--------------|-----------------|
-| **核心策略** | 逐物品最优选择 | Block Packing + Beam Search + 稳定性评估 | 种群进化 | 单点邻域搜索 | 多目标非支配排序 |
-| **装箱对象** | 单个 Box | Block（同SKU长方体） | 单个 Box | 单个 Box | 单个 Box |
-| **物理稳定性** | 无显式支撑率检查 | 支撑率≥50% + 重心偏移评分 | 依赖贪心解码 | 依赖贪心解码 | 依赖贪心解码 |
-| **易碎品约束** | 无特殊处理 | 易碎品支撑率≥70% + 禁止上方压载 | 无特殊处理 | 无特殊处理 | 无特殊处理 |
-| **批次处理** | 按batch排序 | 批次分层 + 位置偏好评分 | 按batch排序 | 按batch排序 | 按batch排序 |
-| **评分方式** | BLF + 墙接触 | **9维加权**（支撑+贴壁+聚集+体积+重心+易碎+批次） | 3维加权 (0.5+0.3+0.2) | 同GA | **3个独立目标，无加权** |
-| **探索机制** | 无（确定性） | Block库自然回退 + 小场景Beam Search | 交叉(80%) + 变异(15%) | 模拟退火 + 4种邻域 | 交叉(85%) + 变异(20%) + 非支配排序 |
-| **输出方案数** | 1个 | 1个 | 1个最优 | 1个最优 | 多个Pareto解 |
-| **商品数量上限** | 无限制 | 无限制 | 200个 | 200个 | 200个 |
-| **多SKU 900件耗时** | ~350ms | ~5ms | 10-20s | 2-5s | 15-30s |
-| **大批量1600件耗时** | ~15s | ~56ms | 30-60s | 10-20s | 50-120s |
-| **多SKU利用率** | 97.80% | **99.60% (+1.80%)** | 约98-99% | 约98.5-99.5% | 97-99.5% |
-| **优点** | 极快，总是可行 | 同SKU聚集，速度优势大，稳定性保证 | 全局搜索能力强 | 微调能力强 | 提供多样化解 |
-| **缺点** | 空间碎片多，无稳定性保证 | 超小场景Block生成有开销 | 可能不稳定 | 依赖种子质量 | 计算量最大 |
+| 维度 | 贪心 (Greedy) | Block 优化 (V1) | 高级 Block (V2) | 遗传算法 (GA) | 局部搜索 (LS) | 帕累托 (NSGA-II) |
+|------|--------------|-----------------|-----------------|--------------|--------------|-----------------|
+| **核心策略** | 逐物品最优选择 | Block Packing + Beam Search + 稳定性评估 | V1 + Batch Corridor + Sequence Penalty | 种群进化 | 单点邻域搜索 | 多目标非支配排序 |
+| **装箱对象** | 单个 Box | Block（同SKU长方体） | Block（同SKU长方体） | 单个 Box | 单个 Box | 单个 Box |
+| **物理稳定性** | 无显式支撑率检查 | 支撑率≥50% + 重心偏移评分 | 支撑率≥50% + 单品级浮空检查 | 依赖贪心解码 | 依赖贪心解码 | 依赖贪心解码 |
+| **易碎品约束** | 无特殊处理 | 易碎品支撑率≥70% + 禁止上方压载 | 同 V1 | 无特殊处理 | 无特殊处理 | 无特殊处理 |
+| **批次处理** | 按batch排序 | 批次分层 + 位置偏好评分 | **动态走廊 + 目标重心 + 顺序惩罚** | 按batch排序 | 按batch排序 | 按batch排序 |
+| **评分方式** | BLF + 墙接触 | **9维加权** | **8维加权**（含批次紧凑度+顺序惩罚） | 3维加权 (0.5+0.3+0.2) | 同GA | **3个独立目标，无加权** |
+| **探索机制** | 无（确定性） | Block库自然回退 + 小场景Beam Search(10) | Beam Search(20) + 批次走廊引导 | 交叉(80%) + 变异(15%) | 模拟退火 + 4种邻域 | 交叉(85%) + 变异(20%) + 非支配排序 |
+| **输出方案数** | 1个 | 1个 | 1个 | 1个最优 | 1个最优 | 多个Pareto解 |
+| **商品数量上限** | 无限制 | 无限制 | 无限制（>500件自动切贪心） | 200个 | 200个 | 200个 |
+| **多SKU 900件耗时** | ~350ms | ~5ms | ~10ms | 10-20s | 2-5s | 15-30s |
+| **多SKU利用率** | 97.80% | **99.60% (+1.80%)** | 同 V1 | 约98-99% | 约98.5-99.5% | 97-99.5% |
+| **批次顺序正确性** | 无保证 | 硬编码偏好 | **软约束引导（动态走廊）** | 无保证 | 无保证 | 无保证 |
+| **优点** | 极快，总是可行 | 同SKU聚集，速度优势大，稳定性保证 | 批次顺序自然正确，适应货量不均 | 全局搜索能力强 | 微调能力强 | 提供多样化解 |
+| **缺点** | 空间碎片多，无稳定性保证 | 超小场景Block生成有开销 | Beam Search 有额外开销 | 可能不稳定 | 依赖种子质量 | 计算量最大 |
+| **适用场景** | 快速基线 | 通用装箱 | **多批次、货量不均** | 全局优化 | 微调优化 | 多方案对比 |
 
 ### API 调用方式
 
@@ -763,8 +889,11 @@ VerificationReport
 # Phase 1: 仅贪心
 POST /api/optimize
 
-# Phase 1.5: 仅 Block 优化（企业级，推荐）
+# Phase 1.5: 仅 Block 优化 V1（企业级）
 POST /api/optimize-block
+
+# Phase 1.6: 高级 Block 优化 V2（推荐，多批次场景）
+POST /api/optimize-advanced-block
 
 # Phase 2: 五种算法并行
 POST /api/optimize-phase2?enable_ga=true&enable_ls=true&enable_pareto=true&enable_block=true&timeout_seconds=60
@@ -776,4 +905,7 @@ POST /api/optimize-phase2?enable_ga=true&enable_ls=true&enable_pareto=true&enabl
 #   pareto_solutions: 帕累托方案列表（0~8个）
 ```
 
-**推荐使用策略：** 多SKU/大批量场景优先使用 Block 优化；需要多方案对比时启用 Phase 2 全开。
+**推荐使用策略：**
+- **多批次、货量不均场景** → 高级 Block V2（`/optimize-advanced-block`）
+- **通用装箱场景** → Block V1（`/optimize-block`）
+- **需要多方案对比** → Phase 2 全开（`/optimize-phase2`）

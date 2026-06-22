@@ -1,22 +1,18 @@
 import { Table, Tag, Empty, Button, Collapse, Tooltip, Progress } from 'antd';
 import { DownloadOutlined, ExperimentOutlined } from '@ant-design/icons';
-import type { OptimizeResponse, Placement, MultiOptimizeResponse } from '../types';
+import type { OptimizeResponse, Placement } from '../types';
 
 interface ResultPanelProps {
   result: OptimizeResponse | null;
-  multiResult?: MultiOptimizeResponse | null;
   onSelectResult?: (result: OptimizeResponse) => void;
 }
 
 const SOLUTION_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  greedy: { label: '贪心', color: 'blue' },
+  advanced_block: { label: '高级Block', color: 'green' },
   block: { label: 'Block优化', color: 'purple' },
-  ga: { label: '遗传算法', color: 'green' },
-  ls: { label: '局部搜索', color: 'cyan' },
-  pareto: { label: '帕累托', color: 'orange' },
 };
 
-export default function ResultPanel({ result, multiResult, onSelectResult }: ResultPanelProps) {
+export default function ResultPanel({ result, onSelectResult }: ResultPanelProps) {
   if (!result) {
     return (
       <Empty description="请配置商品并开始优化" style={{ padding: 40 }} />
@@ -51,7 +47,7 @@ export default function ResultPanel({ result, multiResult, onSelectResult }: Res
     },
   ];
 
-  const typeInfo = SOLUTION_TYPE_LABELS[result.solution_type || 'greedy'];
+  const typeInfo = SOLUTION_TYPE_LABELS[result.solution_type || 'block'];
 
   const feasibilityItems = result.feasibility_report ? [
     {
@@ -175,66 +171,6 @@ export default function ResultPanel({ result, multiResult, onSelectResult }: Res
           </>
         )}
       </div>
-
-      {/* 多方案切换 */}
-      {multiResult && (
-        <div style={{ marginBottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: '#64748b' }}>方案切换：</span>
-          <Tooltip title="贪心算法快速解">
-            <Tag
-              color={result === multiResult.primary ? 'blue' : 'default'}
-              onClick={() => onSelectResult?.(multiResult.primary)}
-              style={{ cursor: 'pointer' }}
-            >
-              贪心 ({(multiResult.primary.container_utilization * 100).toFixed(1)}%)
-            </Tag>
-          </Tooltip>
-          {multiResult.block_solution && (
-            <Tooltip title="Block块状优化（企业级引擎）">
-              <Tag
-                color={result === multiResult.block_solution ? 'purple' : 'default'}
-                onClick={() => onSelectResult?.(multiResult.block_solution!)}
-                style={{ cursor: 'pointer' }}
-              >
-                Block ({(multiResult.block_solution.container_utilization * 100).toFixed(1)}%)
-              </Tag>
-            </Tooltip>
-          )}
-          {multiResult.ga_solution && (
-            <Tooltip title="遗传算法优化">
-              <Tag
-                color={result === multiResult.ga_solution ? 'green' : 'default'}
-                onClick={() => onSelectResult?.(multiResult.ga_solution!)}
-                style={{ cursor: 'pointer' }}
-              >
-                GA ({(multiResult.ga_solution.container_utilization * 100).toFixed(1)}%)
-              </Tag>
-            </Tooltip>
-          )}
-          {multiResult.ls_solution && (
-            <Tooltip title="局部搜索优化">
-              <Tag
-                color={result === multiResult.ls_solution ? 'cyan' : 'default'}
-                onClick={() => onSelectResult?.(multiResult.ls_solution!)}
-                style={{ cursor: 'pointer' }}
-              >
-                LS ({(multiResult.ls_solution.container_utilization * 100).toFixed(1)}%)
-              </Tag>
-            </Tooltip>
-          )}
-          {multiResult.pareto_solutions?.map((p, i) => (
-            <Tooltip key={i} title={`帕累托方案 #${i + 1}`}>
-              <Tag
-                color={result === p ? 'orange' : 'default'}
-                onClick={() => onSelectResult?.(p)}
-                style={{ cursor: 'pointer' }}
-              >
-                P{i + 1} ({(p.container_utilization * 100).toFixed(1)}%)
-              </Tag>
-            </Tooltip>
-          ))}
-        </div>
-      )}
 
       {/* 未放置商品警告 */}
       {result.unplaced_items.length > 0 && (

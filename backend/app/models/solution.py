@@ -61,14 +61,3 @@ class OptimizeResponse(BaseModel):
     cg_deviation_ratio: Optional[float] = None
     solution_type: Optional[str] = None
     feasibility_report: Optional[dict] = None
-
-
-class MultiOptimizeResponse(BaseModel):
-    success: bool
-    primary: OptimizeResponse
-    pareto_solutions: Optional[List[OptimizeResponse]] = None
-    ga_solution: Optional[OptimizeResponse] = None
-    ls_solution: Optional[OptimizeResponse] = None
-    block_solution: Optional[OptimizeResponse] = None
-    algorithm_time_ms: float
-    pareto_count: int = 0

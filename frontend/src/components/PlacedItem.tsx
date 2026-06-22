@@ -7,12 +7,12 @@ interface PlacedItemProps {
   placement: Placement;
   color: string;
   selected?: boolean;
-  dimmed?: boolean;
+  transparent?: boolean;
   hidden?: boolean;
   onClick?: (placement: Placement) => void;
   onDoubleClick?: (placement: Placement) => void;
   itemIndex?: number; // 商品序号（同类商品的第几个）
-  labelVisible?: boolean; // 是否显示编号标签（选中同类商品时为 true）
+  labelVisible?: boolean; // 是否显示编号标签（全局显示标签开关）
   distanceFactor?: number; // Html 标签的缩放因子
 }
 
@@ -20,7 +20,7 @@ export default function PlacedItem({
   placement,
   color,
   selected,
-  dimmed,
+  transparent: isTransparent,
   hidden,
   onClick,
   onDoubleClick,
@@ -32,15 +32,14 @@ export default function PlacedItem({
 
   if (hidden) return null;
 
-  // 关键修复：dimmed 状态不使用透明度，而是通过颜色变暗来表现
-  // 这样所有物体都是不透明的，彻底避免透明排序导致的深度冲突问题
-  // （透明物体在旋转时排序不稳定，会导致建模闪烁/消失）
-  const opacity = 1.0;
-  const transparent = false;
+  // 未选中时其他商品变为半透明以突出选中商品的分布
+  const opacity = isTransparent ? 0.1 : 1.0;
+  const transparentMat = isTransparent;
+  const depthWrite = !isTransparent;
+  const renderSide = isTransparent ? THREE.DoubleSide : THREE.FrontSide;
 
-  // dimmed 时将颜色与 emissive 都压暗，模拟"暗淡"效果
-  const dimFactor = dimmed ? 0.35 : 1.0;
-  const baseColor = new THREE.Color(color).multiplyScalar(dimFactor);
+  // 透明度不影响颜色本身，选中商品正常发光
+  const baseColor = new THREE.Color(color);
   const emissive = selected
     ? new THREE.Color(color)
     : new THREE.Color('#000000');
@@ -60,11 +59,10 @@ export default function PlacedItem({
 
   // 标签根据商品尺寸自适应缩放
   const minDim = Math.min(placement.length, placement.height, placement.width);
-  const fontSize = Math.max(8, Math.min(18, minDim * 0.06));
+  const fontSize = Math.max(6, Math.min(12, minDim * 0.04));
 
-  // 边框颜色：默认深灰，hover 黑色，选中红色
-  // 关键：边框不使用透明度，避免旋转时透明线框排序不稳定导致闪烁/消失
-  const edgeColor = selected ? '#ff0000' : hovered ? '#000000' : '#1e293b';
+  // 边框颜色：默认深灰，hover 黑色，选中红色，透明时浅灰
+  const edgeColor = selected ? '#ff0000' : isTransparent ? '#cbd5e1' : hovered ? '#000000' : '#1e293b';
 
   return (
     <group>
@@ -93,49 +91,49 @@ export default function PlacedItem({
         <meshStandardMaterial
           color={baseColor}
           opacity={opacity}
-          transparent={transparent}
+          transparent={transparentMat}
           emissive={emissive}
           emissiveIntensity={emissiveIntensity}
-          depthWrite={true}
+          depthWrite={depthWrite}
           depthTest={true}
-          side={THREE.FrontSide}
+          side={renderSide}
           roughness={0.4}
           metalness={0.1}
         />
-        {/* 始终显示的边框线，用于区分相邻商品（不透明，避免排序问题） */}
+        {/* 边框线：透明商品使用半透明边框 */}
         <Edges
           threshold={15}
           color={edgeColor}
+          transparent={isTransparent}
+          opacity={isTransparent ? 0.15 : 1}
         />
       </Box>
 
-      {/* 商品编号标签（仅在选中同类商品时显示） */}
-      {labelVisible && (
-        <Html
-          position={[cx, placement.y + placement.height + fontSize * 0.3, cz]}
-          center
-          distanceFactor={distanceFactor}
-          zIndexRange={[20, 0]}
-          style={{ pointerEvents: 'none' }}
-        >
+      {/* 商品编号标签：悬停显示单个，选中显示全部同类 */}
+      <Html
+        position={[cx, placement.y + placement.height + fontSize * 0.3, cz]}
+        center
+        distanceFactor={distanceFactor}
+        zIndexRange={[20, 0]}
+        style={{ pointerEvents: 'none' }}
+      >
+        {(labelVisible || hovered) && (
           <div
             style={{
-              padding: '1px 4px',
-              borderRadius: 3,
-              background: selected ? 'rgba(239,68,68,0.92)' : 'rgba(255,255,255,0.92)',
-              color: selected ? '#fff' : '#0f172a',
               fontSize: fontSize,
-              fontWeight: 600,
+              fontWeight: 500,
               whiteSpace: 'nowrap',
-              border: selected ? '1px solid #dc2626' : '1px solid #cbd5e1',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+              color: selected ? '#ff4444' : '#ffffff',
+              textShadow: '0 0 3px rgba(0,0,0,0.8), 0 0 6px rgba(0,0,0,0.5)',
               fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              pointerEvents: 'none',
+              userSelect: 'none',
             }}
           >
             {label}
           </div>
-        </Html>
-      )}
+        )}
+      </Html>
     </group>
   );
 }

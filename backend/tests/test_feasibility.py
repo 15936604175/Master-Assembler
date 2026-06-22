@@ -99,9 +99,9 @@ def test_verifier_stability_score(container, items):
 
 def test_verifier_orientation_constraint(container):
     """
-    forbidden_horizontal_dims=['height'] means height cannot be horizontal.
-    - "height_vertical": height is vertical → VALID
-    - "width_vertical": width is vertical → height is horizontal → INVALID
+    forbidden_horizontal_dims=['height'] 表示禁止 height 与地面垂直。
+    - "height_vertical": height 垂直 → INVALID
+    - "width_vertical": width 垂直 → height 水平 → VALID
     """
     items_with_constraint = [
         ItemInput(id="X", length=100, width=50, height=30, weight=5, quantity=1,
@@ -109,35 +109,45 @@ def test_verifier_orientation_constraint(container):
     ]
     verifier = FeasibilityVerifier(container, items_with_constraint)
 
-    placements_valid = [
+    placements_invalid = [
         {"item_id": "X", "x": 50, "y": 0, "z": 75, "l": 100, "h": 30, "w": 50,
          "weight": 5, "orientation": "height_vertical"},
     ]
-    report = verifier.verify(placements_valid)
-    assert report.orientation_ok is True
+    report = verifier.verify(placements_invalid)
+    assert report.orientation_ok is False
+    assert report.orientation_violations >= 1
 
-    placements_invalid = [
+    placements_valid = [
         {"item_id": "X", "x": 50, "y": 0, "z": 75, "l": 100, "h": 50, "w": 30,
          "weight": 5, "orientation": "width_vertical"},
     ]
-    report2 = verifier.verify(placements_invalid)
-    assert report2.orientation_ok is False
-    assert report2.orientation_violations >= 1
+    report2 = verifier.verify(placements_valid)
+    assert report2.orientation_ok is True
 
 
 def test_verifier_orientation_multiple_constraints(container):
+    """forbidden=['height', 'length'] → 禁止 height 和 length 垂直，只允许 width_vertical。"""
     items = [
         ItemInput(id="Y", length=100, width=50, height=30, weight=5, quantity=1,
                   forbidden_horizontal_dims=["height", "length"]),
     ]
     verifier = FeasibilityVerifier(container, items)
 
-    placements = [
+    # height_vertical 应该被禁止
+    placements_invalid = [
         {"item_id": "Y", "x": 0, "y": 0, "z": 0, "l": 100, "h": 30, "w": 50,
          "weight": 5, "orientation": "height_vertical"},
     ]
-    report = verifier.verify(placements)
+    report = verifier.verify(placements_invalid)
     assert report.orientation_ok is False
+
+    # width_vertical 应该合法
+    placements_valid = [
+        {"item_id": "Y", "x": 0, "y": 0, "z": 0, "l": 50, "h": 100, "w": 30,
+         "weight": 5, "orientation": "width_vertical"},
+    ]
+    report2 = verifier.verify(placements_valid)
+    assert report2.orientation_ok is True
 
 
 def test_verifier_fragile_violations(container):

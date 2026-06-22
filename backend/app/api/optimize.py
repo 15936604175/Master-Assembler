@@ -1,62 +1,17 @@
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, List, Dict
+from fastapi import APIRouter, HTTPException
+from typing import List, Dict
 from collections import Counter
 import time
 import logging
 from app.models.solution import (
-    OptimizeRequest, OptimizeResponse, MultiOptimizeResponse,
+    OptimizeRequest, OptimizeResponse,
     Placement, UnplacedItem, CGPoint, Stats, SolutionMetrics
 )
-from app.models.container import ContainerConfig
-from app.engine.packer import EPacker
 from app.validators.item_validator import validate_request
 from app.engine.feasibility import FeasibilityVerifier
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-def _build_response(result, solution_type: str, container: ContainerConfig,
-                    items, time_ms: float) -> OptimizeResponse:
-    """Build OptimizeResponse with feasibility report (from EPacker result)."""
-    verifier = FeasibilityVerifier(container, items)
-    placements_dicts = [
-        {
-            "item_id": p.item_id,
-            "x": p.x, "y": p.y, "z": p.z,
-            "l": p.length, "h": p.height, "w": p.width,
-            "weight": p.weight or 0.0,
-            "is_fragile": p.is_fragile or False,
-            "orientation": p.orientation,
-        }
-        for p in result.placements
-    ]
-    report = verifier.verify(placements_dicts)
-    result.cg_deviation_ratio = report.cg_deviation_ratio
-    result.solution_type = solution_type
-    if result.metrics is None:
-        cg = (result.center_of_gravity.x, result.center_of_gravity.y, result.center_of_gravity.z)
-        result.metrics = SolutionMetrics(
-            avg_support_ratio=round(report.support_score, 4),
-            cg_offset_x=round(abs(cg[0] - container.length / 2), 2),
-            cg_offset_z=round(abs(cg[2] - container.width / 2), 2),
-            fragile_violations=report.fragile_violations,
-        )
-    else:
-        result.metrics.avg_support_ratio = round(report.support_score, 4)
-        result.metrics.fragile_violations = report.fragile_violations
-    result.feasibility_report = {
-        "is_feasible": report.is_feasible,
-        "geometry_ok": report.geometry_ok,
-        "physics_ok": report.physics_ok,
-        "orientation_ok": report.orientation_ok,
-        "stability_score": report.stability_score,
-        "support_score": report.support_score,
-        "fragile_violations": report.fragile_violations,
-        "orientation_violations": report.orientation_violations,
-        "messages": report.messages,
-    }
-    return result
 
 
 def _compute_unplaced(items, placements_dicts) -> List[UnplacedItem]:
@@ -76,9 +31,9 @@ def _compute_unplaced(items, placements_dicts) -> List[UnplacedItem]:
     return unplaced
 
 
-def _build_response_from_dicts(container: ContainerConfig, items,
+def _build_response_from_dicts(container, items,
                                 placements_dicts: List[Dict],
-                                solution_type: str, stats_time_ms: int = 0) -> Optional[OptimizeResponse]:
+                                solution_type: str, stats_time_ms: int = 0):
     """Build OptimizeResponse directly from raw placement dictionaries."""
     if not placements_dicts:
         return None
@@ -157,33 +112,9 @@ def _build_response_from_dicts(container: ContainerConfig, items,
     return response
 
 
-@router.post("/optimize", response_model=OptimizeResponse)
-async def optimize(request: OptimizeRequest):
-    try:
-        is_valid, errors = validate_request(request.container, request.items)
-        if not is_valid:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "message": "输入数据验证失败",
-                    "errors": errors,
-                },
-            )
-        packer = EPacker()
-        start = time.time()
-        result = packer.pack(request.container, request.items)
-        elapsed = (time.time() - start) * 1000
-        result.stats.algorithm_time_ms = round(elapsed, 2)
-        return _build_response(result, "greedy", request.container, request.items, elapsed)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/optimize-block", response_model=OptimizeResponse)
 async def optimize_block(request: OptimizeRequest):
-    """Block 块状优化接口（独立调用）。"""
+    """Block 块状优化接口（V1 基础版）。"""
     try:
         is_valid, errors = validate_request(request.container, request.items)
         if not is_valid:
@@ -208,20 +139,9 @@ async def optimize_block(request: OptimizeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/optimize-phase2", response_model=MultiOptimizeResponse)
-async def optimize_phase2(
-    request: OptimizeRequest,
-    enable_ga: bool = Query(True, description="启用遗传算法优化"),
-    enable_ls: bool = Query(True, description="启用局部搜索优化"),
-    enable_pareto: bool = Query(False, description="启用帕累托优化"),
-    enable_block: bool = Query(True, description="启用 Block 块状优化"),
-    timeout_seconds: int = Query(120, description="超时时间（秒）"),
-):
-    """
-    Phase 2 多算法优化接口。
-
-    同时运行贪心、Block 优化、遗传算法、局部搜索和帕累托优化，返回多个方案供选择。
-    """
+@router.post("/optimize-advanced-block", response_model=OptimizeResponse)
+async def optimize_advanced_block(request: OptimizeRequest):
+    """高级 Block 块状优化接口（V2：Batch Corridor + Sequence Penalty + Beam Search）。"""
     try:
         is_valid, errors = validate_request(request.container, request.items)
         if not is_valid:
@@ -229,137 +149,17 @@ async def optimize_phase2(
                 status_code=422,
                 detail={"message": "输入数据验证失败", "errors": errors},
             )
-
-        total_start = time.time()
-        logger.info(f"开始 Phase 2 优化，物品数量: {len(request.items)}, 超时: {timeout_seconds}s")
-
-        # 1. Greedy (baseline)
-        logger.info("运行贪心算法...")
-        packer = EPacker()
-        greedy_result = packer.pack(request.container, request.items)
-        greedy_response = _build_response(
-            greedy_result, "greedy", request.container, request.items, 0
+        from app.engine.advanced_block_optimizer import AdvancedBlockOptimizer
+        start = time.time()
+        advanced_packer = AdvancedBlockOptimizer()
+        placements = advanced_packer.pack(request.container, request.items)
+        elapsed = (time.time() - start) * 1000
+        response = _build_response_from_dicts(
+            request.container, request.items, placements, "advanced_block", round(elapsed, 2)
         )
-        logger.info(f"贪心算法完成，利用率: {greedy_response.container_utilization:.2%}")
-
-        # Check timeout
-        elapsed = time.time() - total_start
-        if elapsed > timeout_seconds:
-            logger.warning(f"超时 ({elapsed:.1f}s > {timeout_seconds}s)，跳过后续优化")
-            return MultiOptimizeResponse(
-                success=True,
-                primary=greedy_response,
-                ga_solution=None,
-                ls_solution=None,
-                block_solution=None,
-                pareto_solutions=None,
-                algorithm_time_ms=round(elapsed * 1000, 2),
-                pareto_count=0,
-            )
-
-        # 1.5 Block Optimization
-        block_response = None
-        if enable_block:
-            elapsed = time.time() - total_start
-            if elapsed > timeout_seconds:
-                logger.warning("超时，跳过 Block 优化")
-            else:
-                logger.info("运行 Block 块状优化...")
-                from app.engine.block_optimizer import BlockOptimizer
-                block_start = time.time()
-                block_packer = BlockOptimizer()
-                block_placements = block_packer.pack(request.container, request.items)
-                block_elapsed = (time.time() - block_start) * 1000
-                if block_placements:
-                    block_response = _build_response_from_dicts(
-                        request.container, request.items, block_placements,
-                        "block", round(block_elapsed, 2)
-                    )
-                    logger.info(f"Block 优化完成，利用率: {block_response.container_utilization:.2%}")
-
-        # 2. Genetic Algorithm
-        ga_response = None
-        ga = None
-        if enable_ga:
-            elapsed = time.time() - total_start
-            if elapsed > timeout_seconds:
-                logger.warning("超时，跳过遗传算法")
-            else:
-                logger.info("运行遗传算法...")
-                from app.engine.genetic_algorithm import GeneticOptimizer, GAConfig
-                ga = GeneticOptimizer(request.container, request.items, GAConfig(
-                    population_size=15, generations=25, elite_count=2
-                ))
-                ga_placements, _, _ = ga.run()
-                if ga_placements:
-                    ga_response = _build_response_from_dicts(
-                        request.container, request.items, ga_placements, "ga", 0
-                    )
-                    logger.info(f"遗传算法完成，利用率: {ga_response.container_utilization:.2%}")
-
-        # 3. Local Search
-        ls_response = None
-        if enable_ls:
-            elapsed = time.time() - total_start
-            if elapsed > timeout_seconds:
-                logger.warning("超时，跳过局部搜索")
-            else:
-                logger.info("运行局部搜索...")
-                from app.engine.local_search import LocalSearchOptimizer, LSConfig
-
-                seed = ga.best_chromosome if (ga is not None and ga.best_chromosome) else None
-
-                ls = LocalSearchOptimizer(request.container, request.items, seed, LSConfig(
-                    max_iterations=80, no_improve_limit=20, strategy="best"
-                ))
-                ls_result = ls.run()
-
-                if ls_result.placements:
-                    ls_response = _build_response_from_dicts(
-                        request.container, request.items, ls_result.placements,
-                        "ls", ls_result.iterations_run
-                    )
-                    logger.info(f"局部搜索完成，利用率: {ls_response.container_utilization:.2%}")
-
-        # 4. Pareto (NSGA-II)
-        pareto_responses: list = []
-        pareto_count = 0
-        if enable_pareto:
-            elapsed = time.time() - total_start
-            if elapsed > timeout_seconds:
-                logger.warning("超时，跳过帕累托优化")
-            else:
-                logger.info("运行帕累托优化...")
-                from app.engine.pareto_optimizer import NSGAOptimizer, NSGAConfig
-                nsga = NSGAOptimizer(request.container, request.items, NSGAConfig(
-                    population_size=20, generations=25, elite_count=3
-                ))
-                pareto_result = nsga.run()
-                pareto_count = len(pareto_result.pareto_front)
-                logger.info(f"帕累托优化完成，找到 {pareto_count} 个方案")
-
-                for ind in pareto_result.pareto_front[:8]:
-                    if not ind.placements:
-                        continue
-                    resp = _build_response_from_dicts(
-                        request.container, request.items, ind.placements, "pareto", 0
-                    )
-                    if resp:
-                        pareto_responses.append(resp)
-
-        total_elapsed = (time.time() - total_start) * 1000
-
-        return MultiOptimizeResponse(
-            success=True,
-            primary=greedy_response,
-            ga_solution=ga_response,
-            ls_solution=ls_response,
-            block_solution=block_response,
-            pareto_solutions=pareto_responses if pareto_responses else None,
-            algorithm_time_ms=round(total_elapsed, 2),
-            pareto_count=pareto_count,
-        )
-
+        if response is None:
+            raise HTTPException(status_code=500, detail="高级 Block 优化未生成有效方案")
+        return response
     except HTTPException:
         raise
     except Exception as e:

@@ -2,29 +2,26 @@ import { useState } from 'react';
 import { ConfigProvider } from 'antd';
 import InputPage from './pages/InputPage';
 import ResultPage from './pages/ResultPage';
-import type { OptimizeResponse, ContainerConfig, MultiOptimizeResponse } from './types';
+import type { OptimizeResponse, ContainerConfig } from './types';
 import type { ItemRow } from './components/ItemListEditor';
 import './App.css';
 
-type Algorithm = 'block' | 'greedy' | 'phase2';
+type Algorithm = 'advanced_block' | 'block';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'input' | 'result'>('input');
   const [result, setResult] = useState<OptimizeResponse | null>(null);
-  const [multiResult, setMultiResult] = useState<MultiOptimizeResponse | null>(null);
   const [container, setContainer] = useState<ContainerConfig>({
     length: 5898, width: 2352, height: 2395, max_weight: 28000,
   });
   const [items, setItems] = useState<ItemRow[]>([]);
-  const [algorithm, setAlgorithm] = useState<Algorithm>('block');
+  const [algorithm, setAlgorithm] = useState<Algorithm>('advanced_block');
 
   const handleOptimizeComplete = (
     optimizeResult: OptimizeResponse,
-    multiOptimizeResult?: MultiOptimizeResponse | null,
     containerConfig?: ContainerConfig
   ) => {
     setResult(optimizeResult);
-    setMultiResult(multiOptimizeResult || null);
     if (containerConfig) {
       setContainer(containerConfig);
     }
@@ -104,13 +101,11 @@ export default function App() {
           algorithm={algorithm}
           setAlgorithm={setAlgorithm}
           existingResult={result}
-          existingMultiResult={multiResult}
         />
       ) : (
         result && (
           <ResultPage
             result={result}
-            multiResult={multiResult}
             container={container}
             onBack={handleBack}
           />

@@ -153,12 +153,12 @@ function SceneInner({
           placement={p}
           color={itemColors[p.item_id] || '#888'}
           selected={selectedId === p.item_id}
-          dimmed={selectedId !== null && selectedId !== p.item_id}
+          transparent={selectedId !== null && selectedId !== p.item_id}
           hidden={hiddenIds.has(p.item_id)}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           itemIndex={itemIndices.get(i)}
-          labelVisible={showLabels || (selectedId !== null && selectedId === p.item_id)}
+          labelVisible={showLabels}
           distanceFactor={distanceFactor}
         />
       ))}
