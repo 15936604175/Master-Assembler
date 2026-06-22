@@ -40,7 +40,7 @@ a = Analysis(
         'cffi', 'pycparser', 'cryptography',
         'lxml', 'beautifulsoup4', 'bs4', 'html5lib',
         'markdown', 'mistune', 'commonmark',
-        'toml', 'tomli', 'tomlkit', 'configparser',
+        'toml', 'tomli', 'tomlkit',
         'yaml', 'PyYAML', 'ruamel',
         'cv2', 'opencv', 'opencv_python',
         'moviepy', 'scikit_image', 'skimage',
