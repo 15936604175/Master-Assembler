@@ -1,4 +1,4 @@
-import { GITHUB_OWNER, GITHUB_REPO, APP_VERSION } from '../config';
+import { GITHUB_OWNER, GITHUB_REPO, getAppVersion } from '../config';
 
 export interface GitHubRelease {
   tag_name: string;
@@ -9,7 +9,11 @@ export interface GitHubRelease {
 
 export async function checkForUpdate(): Promise<GitHubRelease | null> {
   try {
-    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+    const [currentVer, url] = await Promise.all([
+      getAppVersion(),
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`,
+    ]);
+
     const res = await fetch(url, {
       headers: { Accept: 'application/vnd.github.v3+json' },
       signal: AbortSignal.timeout(5000),
@@ -18,7 +22,6 @@ export async function checkForUpdate(): Promise<GitHubRelease | null> {
 
     const release: GitHubRelease = await res.json();
     const latestVer = release.tag_name.replace(/^v/, '');
-    const currentVer = APP_VERSION;
 
     if (compareVersions(latestVer, currentVer) > 0) {
       return release;
