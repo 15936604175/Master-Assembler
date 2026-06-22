@@ -5,12 +5,12 @@ import ContainerConfig from '../components/ContainerConfig';
 import ItemListEditor from '../components/ItemListEditor';
 import type { ItemRow } from '../components/ItemListEditor';
 import BoxLoader from '../components/BoxLoader';
-import { optimize, optimizePhase2 } from '../services/api';
+import { optimize, optimizeBlock, optimizePhase2 } from '../services/api';
 import type { OptimizeResponse, MultiOptimizeResponse, ContainerConfig as ContainerConfigType, ItemInput } from '../types';
 
 const { Title, Text } = Typography;
 
-type Algorithm = 'greedy' | 'phase2';
+type Algorithm = 'block' | 'greedy' | 'phase2';
 
 interface InputPageProps {
   onOptimizeComplete: (
@@ -72,6 +72,8 @@ export default function InputPage({
     setLoading(true);
     if (algorithm === 'phase2') {
       setLoadingText('Phase 2 智能优化中，预计 30-60 秒...');
+    } else if (algorithm === 'block') {
+      setLoadingText('Block 块状优化中...');
     } else {
       setLoadingText('正在计算装配方案...');
     }
@@ -84,6 +86,10 @@ export default function InputPage({
         );
         onOptimizeComplete(result.primary, result, container);
         message.success(`优化完成 (${result.pareto_count} 个帕累托方案，耗时 ${result.algorithm_time_ms}ms)`);
+      } else if (algorithm === 'block') {
+        const result = await optimizeBlock({ container, items: inputItems });
+        onOptimizeComplete(result, null, container);
+        message.success(`Block 优化完成 (利用率 ${(result.container_utilization * 100).toFixed(1)}%，耗时 ${result.stats.algorithm_time_ms}ms)`);
       } else {
         const result = await optimize({ container, items: inputItems });
         onOptimizeComplete(result, null, container);
@@ -231,6 +237,36 @@ export default function InputPage({
                     display: 'flex',
                     alignItems: 'flex-start',
                     padding: 14,
+                    border: algorithm === 'block' ? '2px solid #7c3aed' : '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    background: algorithm === 'block' ? '#f5f3ff' : '#fff',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Radio value="block" style={{ marginTop: 2 }} />
+                  <div style={{ flex: 1, marginLeft: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <ThunderboltOutlined style={{ color: '#7c3aed' }} />
+                      <strong style={{ fontSize: 15, color: '#0f172a' }}>Block 块状优化</strong>
+                      <span style={{
+                        fontSize: 11, padding: '1px 6px', borderRadius: 4,
+                        background: '#ede9fe', color: '#7c3aed', fontWeight: 500,
+                      }}>
+                        推荐
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>
+                      企业级引擎：同SKU聚集 + 物理稳定性 + 批次分层 + Beam Search，速度快利用率高
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    padding: 14,
                     border: algorithm === 'phase2' ? '2px solid #1d4ed8' : '1px solid #e2e8f0',
                     borderRadius: 8,
                     cursor: 'pointer',
@@ -241,14 +277,8 @@ export default function InputPage({
                   <Radio value="phase2" style={{ marginTop: 2 }} />
                   <div style={{ flex: 1, marginLeft: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <ThunderboltOutlined style={{ color: '#1d4ed8' }} />
+                      <BulbOutlined style={{ color: '#1d4ed8' }} />
                       <strong style={{ fontSize: 15, color: '#0f172a' }}>Phase 2 智能优化</strong>
-                      <span style={{
-                        fontSize: 11, padding: '1px 6px', borderRadius: 4,
-                        background: '#dbeafe', color: '#1d4ed8', fontWeight: 500,
-                      }}>
-                        推荐
-                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>
                       遗传算法 + 局部搜索 + 帕累托多目标优化，提供多个优化方案供对比选择
@@ -271,7 +301,7 @@ export default function InputPage({
                   <Radio value="greedy" style={{ marginTop: 2 }} />
                   <div style={{ flex: 1, marginLeft: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <BulbOutlined style={{ color: '#64748b' }} />
+                      <InfoCircleOutlined style={{ color: '#64748b' }} />
                       <strong style={{ fontSize: 15, color: '#0f172a' }}>Phase 1 贪心算法</strong>
                     </div>
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.6 }}>

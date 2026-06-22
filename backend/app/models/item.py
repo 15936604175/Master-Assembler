@@ -13,9 +13,10 @@ class ItemInput(BaseModel):
     batch_number: int = Field(default=0, ge=0, description="Batch number, smaller is placed first")
     forbidden_horizontal_dims: List[str] = Field(
         default_factory=list,
-        description="Dimensions that cannot be horizontal. Empty list = no constraint. "
+        description="禁止与地面垂直的维度（即禁止该维度朝上）。最多 2 个参数。"
                     "Values: 'length', 'width', 'height'. "
-                    "e.g. ['length'] = length must be vertical (face W×H on ground)."
+                    "e.g. ['height'] = height 不能朝上（排除 height_vertical）；"
+                    "['height', 'width'] = 只允许 length_vertical。"
     )
 
     @field_validator("forbidden_horizontal_dims")
@@ -25,6 +26,10 @@ class ItemInput(BaseModel):
         if not all(dim in allowed for dim in v):
             raise ValueError(
                 f"forbidden_horizontal_dims must contain only 'length', 'width', 'height'"
+            )
+        if len(v) > 2:
+            raise ValueError(
+                f"forbidden_horizontal_dims 最多 2 个参数（至少要有一个维度可以垂直），实际: {v}"
             )
         return v
 

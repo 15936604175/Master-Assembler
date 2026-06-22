@@ -144,8 +144,12 @@ class BlockGenerator:
         for item in self.items:
             sku_blocks = self._generate_for_sku(item)
             # 每个 SKU 只保留 top-K（按 Block 质量评分）
+            # 但强制保留所有小 Block（count ≤ 4），避免剩余少量物品无法放置
             sku_blocks.sort(key=lambda b: b.quality_score, reverse=True)
-            all_blocks.extend(sku_blocks[:MAX_BLOCKS_PER_SKU])
+            top_k = sku_blocks[:MAX_BLOCKS_PER_SKU]
+            small_blocks = [b for b in sku_blocks[MAX_BLOCKS_PER_SKU:] if b.count <= 4]
+            all_blocks.extend(top_k)
+            all_blocks.extend(small_blocks)
 
         # 总排序：主排序 = 单品体积降序（大物品优先占空间）
         #         次排序 = Block 质量降序（同 SKU 中紧凑的 Block 优先）
@@ -621,12 +625,61 @@ class StabilityEvaluator:
         placements: List[Dict],
     ) -> Tuple[float, bool]:
         """检查支撑是否满足约束。
-        普通 Block: ≥ 70%；易碎品 Block: ≥ 85%
+        普通 Block: ≥ 50%；易碎品 Block: ≥ 70%
+        同时检查单品级浮空：Block 底部每个单品位置必须有支撑（不允许单品完全浮空）
         返回 (support_ratio, is_supported)
         """
         ratio = self.calc_support_ratio(x, y, z, block.length, block.height, block.width, placements)
         threshold = FRAGILE_SAFETY_RATIO if block.is_fragile else SUPPORT_THRESHOLD
-        return ratio, ratio >= threshold
+        if ratio < threshold:
+            return ratio, False
+
+        # 单品级浮空检查：Block 底部按单品尺寸划分网格，每个单元必须有支撑
+        if y > VERTICAL_TOLERANCE and block.count > 1:
+            if not self._check_no_floating_items(block, x, y, z, placements):
+                return ratio, False
+
+        return ratio, True
+
+    def _check_no_floating_items(
+        self,
+        block: Block,
+        x: float, y: float, z: float,
+        placements: List[Dict],
+    ) -> bool:
+        """检查 Block 底部每个单品位置是否有足够支撑。
+        只检查底层（ny=0 的单品），因为上层单品由下层支撑。
+        每个底层单品的支撑率必须 ≥ SUPPORT_THRESHOLD（50%）。
+        """
+        il, ih, iw = block.item_length, block.item_height, block.item_width
+
+        for ix in range(block.nx):
+            for iz in range(block.nz):
+                # 单品底部的 x, z 范围
+                sx = x + ix * il
+                sz = z + iz * iw
+                sx2 = sx + il
+                sz2 = sz + iw
+
+                # 检查这个单品位置是否有支撑
+                supported_area = 0.0
+                for p in placements:
+                    p_top = p["y"] + p["h"]
+                    if abs(p_top - y) > VERTICAL_TOLERANCE:
+                        continue
+                    ox = max(0, min(sx2, p["x"] + p["l"]) - max(sx, p["x"]))
+                    oz = max(0, min(sz2, p["z"] + p["w"]) - max(sz, p["z"]))
+                    supported_area += ox * oz
+
+                # 单品底面积
+                item_area = il * iw
+                item_ratio = supported_area / item_area if item_area > 0 else 0
+
+                # 每个单品支撑率必须 ≥ SUPPORT_THRESHOLD
+                if item_ratio < SUPPORT_THRESHOLD:
+                    return False
+
+        return True
 
     def calc_cg_offset(
         self,

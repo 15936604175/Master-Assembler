@@ -31,7 +31,7 @@ def validate_items(items: List[ItemInput], container: ContainerConfig
             errors.append(
                 f"商品 '{item.id}' 的朝向约束矛盾: "
                 f"forbidden_horizontal_dims={item.forbidden_horizontal_dims} "
-                f"导致所有 3 种朝向均被排除（每个维度只能有一个垂直，不能同时禁止两个维度水平）"
+                f"导致所有 3 种朝向均被排除（最多禁止 2 个维度垂直，至少保留 1 个合法朝向）"
             )
             continue
 

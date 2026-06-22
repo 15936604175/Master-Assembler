@@ -256,7 +256,22 @@ offset_x = |cg_x - container_l/2| / (container_l/2)  # 归一化到 [0, 1]
 score_penalty = (offset_x + offset_z) × 20         # 评分中的惩罚项
 ```
 
-### 2.5 易碎品安全约束（FragileConstraint）
+### 2.5 Block 库生成保障（小 Block 保留机制）
+
+**问题背景：** 当 SKU 的 Block 组合数超过 `MAX_BLOCKS_PER_SKU=200` 时，按质量评分排序会截断，导致小 Block（如 1×1×1 单品）被挤出，剩余少量物品无法放置。
+
+**解决方案：** 在 top-K 截断后，强制保留所有 `count ≤ 4` 的小 Block：
+```python
+sku_blocks.sort(key=lambda b: b.quality_score, reverse=True)
+top_k = sku_blocks[:MAX_BLOCKS_PER_SKU]
+small_blocks = [b for b in sku_blocks[MAX_BLOCKS_PER_SKU:] if b.count <= 4]
+all_blocks.extend(top_k)
+all_blocks.extend(small_blocks)
+```
+
+**效果：** 确保任何剩余物品（1~4 件）都能找到合适的 Block 放置，避免"明明还能放却报空间不足"的问题。
+
+### 2.6 易碎品安全约束（FragileConstraint）
 
 ```
 规则1: 易碎品 Block 的支撑率 ≥ 70%（比普通 50% 更严格）
@@ -266,7 +281,7 @@ score_penalty = (offset_x + offset_z) × 20         # 评分中的惩罚项
 
 实现机制：放置后遍历所有已放置 fragile Block，检查是否有物品 top > fragile_top 且水平重叠。
 
-### 2.6 批次感知分层装载（BatchManager）
+### 2.7 批次感知分层装载（BatchManager）
 
 **业务背景：** 不同 batch 对应不同卸货点，货物需按卸货顺序分层排列。
 
@@ -292,7 +307,7 @@ else:
     score = 1 - x / cl
 ```
 
-### 2.7 综合评分函数（ScoringFunction）—— 9 维度加权
+### 2.8 综合评分函数（ScoringFunction）—— 9 维度加权
 
 遍历所有 `(Extreme Point × Block)` 组合，选评分最高者：
 
@@ -316,7 +331,7 @@ for pb in placed_blocks:
 same_sku_ratio = contact_area / block_surface_area   # [0, 1]
 ```
 
-### 2.8 Beam Search 增强（小场景启用）
+### 2.9 Beam Search 增强（小场景启用）
 
 **策略：** 中小场景（≤300件）额外执行 Beam Search 探索更优解，大场景（>300件）使用贪心路径保证性能。
 
@@ -342,7 +357,7 @@ Beam Search 流程：
    return greedy_solution if beam_util <= greedy_util + 1% else beam_solution
 ```
 
-### 2.9 主流程
+### 2.10 主流程
 
 ```
 输入: container, items
@@ -363,7 +378,7 @@ Step4: Beam Search 路径（仅 ≤300 件场景）：
 Step5: 输出 placement 列表（与 EPacker 格式一致）
 ```
 
-### 2.10 与贪心算法的对比
+### 2.11 与贪心算法的对比
 
 | 维度 | 贪心 (EPacker) | Block 优化 (BlockOptimizer) |
 |------|---------------|---------------------------|
@@ -379,7 +394,7 @@ Step5: 输出 placement 列表（与 EPacker 格式一致）
 | **利用率（多SKU 900件）** | 97.80% | **99.60% (+1.80%)** |
 | **利用率（混合尺寸750件）** | 99.20% | **99.80% (+0.60%)** |
 
-### 2.11 输出指标
+### 2.12 输出指标
 
 Block 优化输出与贪心算法完全一致的 placement 格式，复用 `_build_response_from_dicts` 构建 `OptimizeResponse`，包含：
 - `container_utilization`：已用体积 / 容器总体积

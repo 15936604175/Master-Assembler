@@ -111,6 +111,8 @@ function OrientationSelector({ item, onUpdate }: {
     if (isDisabled(dim)) {
       onUpdate('forbidden_horizontal_dims', forbiddenDims.filter(d => d !== dim));
     } else {
+      // 最多禁止 2 个维度（至少保留 1 个合法朝向）
+      if (forbiddenDims.length >= 2) return;
       onUpdate('forbidden_horizontal_dims', [...forbiddenDims, dim]);
     }
   };

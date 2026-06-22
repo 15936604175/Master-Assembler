@@ -6,7 +6,7 @@ import type { OptimizeResponse, ContainerConfig, MultiOptimizeResponse } from '.
 import type { ItemRow } from './components/ItemListEditor';
 import './App.css';
 
-type Algorithm = 'greedy' | 'phase2';
+type Algorithm = 'block' | 'greedy' | 'phase2';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'input' | 'result'>('input');
@@ -16,7 +16,7 @@ export default function App() {
     length: 5898, width: 2352, height: 2395, max_weight: 28000,
   });
   const [items, setItems] = useState<ItemRow[]>([]);
-  const [algorithm, setAlgorithm] = useState<Algorithm>('phase2');
+  const [algorithm, setAlgorithm] = useState<Algorithm>('block');
 
   const handleOptimizeComplete = (
     optimizeResult: OptimizeResponse,

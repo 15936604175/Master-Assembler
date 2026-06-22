@@ -147,14 +147,16 @@ class FeasibilityVerifier:
 
         return True, messages, total_weight
 
-    ORIENTATION_HORIZONTAL = {
-        "height_vertical": {"length", "width"},
-        "width_vertical": {"length", "height"},
-        "length_vertical": {"width", "height"},
+    ORIENTATION_VERTICAL_DIM = {
+        "height_vertical": "height",
+        "width_vertical": "width",
+        "length_vertical": "length",
     }
 
     def _verify_orientation(self, placements: List[Dict]) -> Tuple[bool, List[str]]:
-        """Check forbidden_horizontal_dims constraints."""
+        """Check forbidden_horizontal_dims constraints.
+        语义：forbidden_horizontal_dims 中的维度禁止与地面垂直（朝上）。
+        """
         violations = self._count_orientation_violations(placements)
         ok = violations == 0
         messages = []
@@ -167,13 +169,12 @@ class FeasibilityVerifier:
             if not forbidden_list:
                 continue
             orientation = p.get("orientation", "")
-            if orientation not in self.ORIENTATION_HORIZONTAL:
+            if orientation not in self.ORIENTATION_VERTICAL_DIM:
                 continue
-            horizontal = self.ORIENTATION_HORIZONTAL[orientation]
-            violating = set(forbidden_list) & horizontal
-            if violating:
+            vertical_dim = self.ORIENTATION_VERTICAL_DIM[orientation]
+            if vertical_dim in set(forbidden_list):
                 messages.append(
-                    f"[朝向] 商品 {item_id} 禁止水平维度 {list(violating)} 但实际为水平"
+                    f"[朝向] 商品 {item_id} 禁止 {vertical_dim} 与地面垂直，但实际为 {orientation}"
                 )
         return ok, messages
 
@@ -188,10 +189,10 @@ class FeasibilityVerifier:
             if not forbidden_list:
                 continue
             orientation = p.get("orientation", "")
-            if orientation not in self.ORIENTATION_HORIZONTAL:
+            if orientation not in self.ORIENTATION_VERTICAL_DIM:
                 continue
-            horizontal = self.ORIENTATION_HORIZONTAL[orientation]
-            if set(forbidden_list) & horizontal:
+            vertical_dim = self.ORIENTATION_VERTICAL_DIM[orientation]
+            if vertical_dim in set(forbidden_list):
                 count += 1
         return count
 
