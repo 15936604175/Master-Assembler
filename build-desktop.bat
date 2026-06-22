@@ -36,6 +36,7 @@ echo.
 echo [3/4] Packaging backend with PyInstaller...
 cd /d "%~dp0backend"
 if exist "dist\backend" rmdir /s /q "dist\backend"
+if exist "dist\backend.exe" del /q "dist\backend.exe"
 if exist "build" rmdir /s /q "build"
 pip install pyinstaller --quiet
 pyinstaller backend.spec -y
@@ -49,7 +50,7 @@ cd /d "%~dp0"
 echo.
 echo [4/4] Building Tauri desktop app...
 if not exist "%~dp0src-tauri\binaries" mkdir "%~dp0src-tauri\binaries"
-copy /Y "%~dp0backend\dist\backend\backend.exe" "%~dp0src-tauri\binaries\backend-x86_64-pc-windows-msvc.exe"
+copy /Y "%~dp0backend\dist\backend.exe" "%~dp0src-tauri\binaries\backend-x86_64-pc-windows-msvc.exe"
 
 cd /d "%~dp0src-tauri"
 set PATH=%USERPROFILE%\.cargo\bin;%PATH%
