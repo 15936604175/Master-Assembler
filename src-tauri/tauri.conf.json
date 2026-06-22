@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
-  "productName": "装配大师",
+  "productName": "Master-Assembler",
   "identifier": "com.master-assembler.desktop",
   "build": {
     "frontendDist": "../frontend/dist",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "装配大师 - 3D 集装箱装载优化",
+        "title": "Master-Assembler - 3D Container Loading Optimization",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,
