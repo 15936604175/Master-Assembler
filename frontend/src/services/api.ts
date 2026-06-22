@@ -1,6 +1,8 @@
 import type { OptimizeRequest, OptimizeResponse } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.PROD
+  ? 'http://127.0.0.1:8000'
+  : '/api';
 
 export async function optimizeBlock(request: OptimizeRequest): Promise<OptimizeResponse> {
   const response = await fetch(`${API_BASE}/optimize-block`, {

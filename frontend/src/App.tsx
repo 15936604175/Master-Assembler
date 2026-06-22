@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { ConfigProvider } from 'antd';
+import { useState, useEffect } from 'react';
+import { ConfigProvider, notification } from 'antd';
 import InputPage from './pages/InputPage';
 import ResultPage from './pages/ResultPage';
 import type { OptimizeResponse, ContainerConfig } from './types';
 import type { ItemRow } from './components/ItemListEditor';
+import { checkForUpdate } from './utils/updateCheck';
 import './App.css';
 
 type Algorithm = 'advanced_block' | 'block';
@@ -16,6 +17,38 @@ export default function App() {
   });
   const [items, setItems] = useState<ItemRow[]>([]);
   const [algorithm, setAlgorithm] = useState<Algorithm>('advanced_block');
+
+  // 启动时检查 GitHub 版本更新
+  useEffect(() => {
+    checkForUpdate().then((release) => {
+      if (release) {
+        notification.info({
+          message: '发现新版本',
+          description: (
+            <div>
+              <p style={{ margin: 0 }}>最新版本：{release.tag_name}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
+                {release.body?.slice(0, 200)}
+              </p>
+            </div>
+          ),
+          duration: 0,
+          btn: (
+            <a
+              href={release.html_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 13 }}
+            >
+              前往下载
+            </a>
+          ),
+          placement: 'bottomRight',
+          style: { cursor: 'pointer' },
+        });
+      }
+    });
+  }, []);
 
   const handleOptimizeComplete = (
     optimizeResult: OptimizeResponse,

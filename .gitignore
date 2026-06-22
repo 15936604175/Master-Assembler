@@ -78,6 +78,10 @@ frontend/build/
 Thumbs.db
 Desktop.ini
 
+# Tauri / Rust
+src-tauri/target/
+src-tauri/binaries/
+
 # Logs
 logs/
 *.log
