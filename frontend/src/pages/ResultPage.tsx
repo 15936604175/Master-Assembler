@@ -159,6 +159,9 @@ export default function ResultPage({ result, container, onBack }: ResultPageProp
           flex: 1,
           background: '#fff',
           borderBottom: '1px solid #e2e8f0',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
         }}>
           <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>加载3D场景...</div>}>
             <Layout3D

@@ -246,9 +246,8 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
   return (
     <div
       style={{
-        width: '100%',
-        height: '100%',
-        minHeight: 400,
+        flex: 1,
+        minHeight: 0,
         background: '#e2e8f0',
         position: 'relative',
         display: 'flex',
