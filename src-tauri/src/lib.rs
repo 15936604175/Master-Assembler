@@ -7,39 +7,30 @@ struct BackendState {
 }
 
 fn start_backend(app: &tauri::AppHandle) -> Option<Child> {
-    let resource_dir = app
+    let backend_dir = app
         .path()
         .resource_dir()
         .ok()?
         .join("binaries");
 
-    // Try multiple possible paths for the backend executable
-    let possible_paths = [
-        resource_dir.join("backend.exe"),
-        resource_dir.join("backend-x86_64-pc-windows-msvc.exe"),
-        app.path().resource_dir().ok()?.join("backend.exe"),
-    ];
+    let backend_path = backend_dir.join("backend.exe");
 
-    let backend_path = possible_paths
-        .iter()
-        .find(|p| p.exists())
-        .cloned();
-
-    let path = match backend_path {
-        Some(p) => p,
-        None => {
-            eprintln!("Backend executable not found, searched paths:");
-            for p in &possible_paths {
-                eprintln!("  {}", p.display());
+    if !backend_path.exists() {
+        eprintln!("Backend not found at: {}", backend_path.display());
+        eprintln!("Searched dir contents:");
+        if let Ok(entries) = std::fs::read_dir(&backend_dir) {
+            for e in entries.flatten() {
+                eprintln!("  {}", e.path().display());
             }
-            return None;
         }
-    };
+        return None;
+    }
 
-    eprintln!("Starting backend: {}", path.display());
+    eprintln!("Starting backend: {}", backend_path.display());
 
-    let child = Command::new(&path)
+    let child = Command::new(&backend_path)
         .arg("8000")
+        .current_dir(&backend_dir)
         .spawn()
         .ok()?;
 
@@ -75,7 +66,6 @@ fn get_backend_url() -> String {
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![get_backend_url])
         .setup(|app| {
             let child = start_backend(&app.handle());

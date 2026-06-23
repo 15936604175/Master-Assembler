@@ -49,8 +49,8 @@ cd /d "%~dp0"
 :: Copy sidecar and build Tauri
 echo.
 echo [4/4] Building Tauri desktop app...
-if not exist "%~dp0src-tauri\binaries" mkdir "%~dp0src-tauri\binaries"
-copy /Y "%~dp0backend\dist\backend.exe" "%~dp0src-tauri\binaries\backend-x86_64-pc-windows-msvc.exe"
+if exist "%~dp0src-tauri\binaries" rmdir /s /q "%~dp0src-tauri\binaries"
+xcopy /E /I /Y "%~dp0backend\dist\backend" "%~dp0src-tauri\binaries"
 
 cd /d "%~dp0src-tauri"
 set PATH=%USERPROFILE%\.cargo\bin;%PATH%

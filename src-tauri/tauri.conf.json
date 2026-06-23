@@ -33,9 +33,9 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "binaries/backend"
-    ],
+    "resources": {
+      "binaries/": "binaries/"
+    },
     "windows": {
       "nsis": null
     }
