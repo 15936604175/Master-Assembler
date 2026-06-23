@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Master-Assembler 启动脚本
+# Master-Assembler 开发启动脚本
+# 启动 Python 后端 + Vite 前端开发服务器
 
 # 存储后台进程 PID
 BACKEND_PID=""
@@ -38,7 +39,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM EXIT
 
 echo "=========================================="
-echo "装配大师 - 启动脚本"
+echo "装配大师 - 开发启动脚本"
 echo "(按 Ctrl+C 可安全关闭所有服务)"
 echo "=========================================="
 
@@ -52,10 +53,9 @@ echo "检查后端服务..."
 if curl -s http://127.0.0.1:8000/health > /dev/null 2>&1; then
     echo "✓ 后端服务已运行在 http://127.0.0.1:8000"
 else
-    echo "启动后端服务..."
-    cd backend-rust
-    cargo build --release 2>/dev/null
-    ./target/release/backend 8000 &
+    echo "启动 Python 后端服务..."
+    cd backend
+    python3 -m uvicorn app.main:app --port 8000 &
     BACKEND_PID=$!
     cd ..
     sleep 3
