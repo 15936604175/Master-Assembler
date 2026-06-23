@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useState, useRef, useCallback } from 'react';
+import { Suspense, useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
@@ -71,6 +71,64 @@ function CameraAnimator({ target, onArrived }: CameraAnimatorProps) {
   return null;
 }
 
+interface AnimatedItemProps {
+  placement: Placement;
+  color: string;
+  selected: boolean;
+  transparent: boolean;
+  hidden: boolean;
+  onClick: (p: Placement) => void;
+  onDoubleClick: (p: Placement) => void;
+  itemIndex?: number;
+  labelVisible: boolean;
+  distanceFactor: number;
+  isNew: boolean; // 是否是刚出现的物品（需要掉落动画）
+  containerHeight: number;
+}
+
+/** 带掉落动画的物品包装器 */
+function AnimatedItem({ isNew, containerHeight, placement, ...rest }: AnimatedItemProps) {
+  const [dropProgress, setDropProgress] = useState(isNew ? 0 : 1);
+  const animating = useRef(isNew);
+
+  useEffect(() => {
+    if (isNew) {
+      setDropProgress(0);
+      animating.current = true;
+    }
+  }, [isNew]);
+
+  useFrame((_, delta) => {
+    if (animating.current && dropProgress < 1) {
+      const next = Math.min(1, dropProgress + delta * 3); // ~0.33s 掉落
+      setDropProgress(next);
+      if (next >= 1) animating.current = false;
+    }
+  });
+
+  // 掉落效果：从高处落下 + 缩放从小到大
+  const eased = dropProgress < 0.5
+    ? 2 * dropProgress * dropProgress
+    : 1 - Math.pow(-2 * dropProgress + 2, 2) / 2;
+  const yOffset = (1 - eased) * containerHeight * 1.5;
+  const scaleVal = 0.3 + eased * 0.7;
+
+  // 将原始 placement 的 y 偏移，通过修改 position 实现
+  const animPlacement: Placement = {
+    ...placement,
+    y: placement.y + yOffset,
+  };
+
+  return (
+    <group scale={[scaleVal, scaleVal, scaleVal]}>
+      <PlacedItem
+        placement={animPlacement}
+        {...rest}
+      />
+    </group>
+  );
+}
+
 interface SceneInnerProps {
   result: OptimizeResponse | null;
   container: ContainerConfig;
@@ -82,6 +140,7 @@ interface SceneInnerProps {
   onCameraArrived: () => void;
   distanceFactor: number;
   showLabels: boolean;
+  playbackIndex: number; // -1 = 显示全部, 0..N = 显示前 N 个
 }
 
 function SceneInner({
@@ -95,6 +154,7 @@ function SceneInner({
   onCameraArrived,
   distanceFactor,
   showLabels,
+  playbackIndex,
 }: SceneInnerProps) {
   const itemColors = useMemo(() => {
     const colorMap: Record<string, string> = {};
@@ -147,30 +207,37 @@ function SceneInner({
         intensity={0.4}
       />
       <ContainerMesh length={container.length} width={container.width} height={container.height} />
-      {result?.placements.map((p, i) => (
-        <PlacedItem
-          key={i}
-          placement={p}
-          color={itemColors[p.item_id] || '#888'}
-          selected={selectedId === p.item_id}
-          transparent={selectedId !== null && selectedId !== p.item_id}
-          hidden={hiddenIds.has(p.item_id)}
-          onClick={handleClick}
-          onDoubleClick={handleDoubleClick}
-          itemIndex={itemIndices.get(i)}
-          labelVisible={showLabels}
-          distanceFactor={distanceFactor}
-        />
-      ))}
+      {result?.placements.map((p, i) => {
+        // 播放模式：只显示前 playbackIndex 个
+        if (playbackIndex >= 0 && i >= playbackIndex) return null;
+        const isNew = playbackIndex >= 0 && i === playbackIndex - 1;
+        return (
+          <AnimatedItem
+            key={i}
+            placement={p}
+            color={itemColors[p.item_id] || '#888'}
+            selected={selectedId === p.item_id}
+            transparent={selectedId !== null && selectedId !== p.item_id}
+            hidden={hiddenIds.has(p.item_id)}
+            onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
+            itemIndex={itemIndices.get(i)}
+            labelVisible={showLabels}
+            distanceFactor={distanceFactor}
+            isNew={isNew}
+            containerHeight={container.height}
+          />
+        );
+      })}
       <Grid
         position={[container.length / 2, 0, container.width / 2]}
         args={[container.length, container.width]}
         cellSize={Math.max(container.length, container.width) / 10}
         cellThickness={0.5}
-        cellColor="#cbd5e1"
+        cellColor="#3A3A3A"
         sectionSize={Math.max(container.length, container.width) / 2}
         sectionThickness={1}
-        sectionColor="#94a3b8"
+        sectionColor="#4A4A52"
       />
       <OrbitControls
         makeDefault
@@ -184,12 +251,57 @@ function SceneInner({
   );
 }
 
+type PlayState = 'idle' | 'playing' | 'paused';
+
 export default function Layout3D({ result, container, showLabels = false }: Layout3DProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [cameraTarget, setCameraTarget] = useState<ViewPreset | null>(null);
   const maxDim = Math.max(container.length, container.height, container.width);
   const camDist = maxDim * 1.5;
+
+  // 播放状态
+  const [playState, setPlayState] = useState<PlayState>('idle');
+  const [playbackIndex, setPlaybackIndex] = useState(-1); // -1=全部显示
+  const [speed, setSpeed] = useState(2); // 每秒放置几个
+  const totalItems = result?.placements.length ?? 0;
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 播放控制
+  useEffect(() => {
+    if (playState === 'playing' && result) {
+      timerRef.current = setInterval(() => {
+        setPlaybackIndex((prev) => {
+          if (prev >= totalItems) {
+            setPlayState('idle');
+            return -1; // 播放结束，显示全部
+          }
+          return prev + 1;
+        });
+      }, 1000 / speed);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [playState, speed, totalItems, result]);
+
+  const handlePlay = () => {
+    if (!result || totalItems === 0) return;
+    if (playState === 'playing') {
+      setPlayState('paused');
+    } else if (playState === 'paused') {
+      setPlayState('playing');
+    } else {
+      // idle -> start from 0
+      setPlaybackIndex(0);
+      setPlayState('playing');
+    }
+  };
+
+  const handleStopPlayback = () => {
+    setPlayState('idle');
+    setPlaybackIndex(-1);
+  };
 
   // 双击商品切换该类商品隐藏/显示
   const toggleHide = useCallback((id: string) => {
@@ -234,10 +346,10 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
   const toolBtnStyle: React.CSSProperties = {
     padding: '6px 12px',
     fontSize: 12,
-    border: '1px solid #e2e8f0',
-    borderRadius: 6,
-    background: '#fff',
-    color: '#475569',
+    border: '1px solid var(--border)',
+    borderRadius: 4,
+    background: 'var(--bg-tertiary)',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     transition: 'all 0.2s',
     fontWeight: 500,
@@ -248,7 +360,7 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
       style={{
         flex: 1,
         minHeight: 0,
-        background: '#e2e8f0',
+        background: 'var(--viewport-bg)',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
@@ -257,8 +369,8 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
       {/* 3D 视图工具条 */}
       <div style={{
         height: 40,
-        background: '#fff',
-        borderBottom: '1px solid #e2e8f0',
+        background: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -266,8 +378,8 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>3D 装配视图</span>
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>3D 装配视图</span>
+          <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
             {container.length}×{container.width}×{container.height} mm
           </span>
         </div>
@@ -277,21 +389,22 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
               key={preset.id}
               onClick={() => handleViewPreset(preset)}
               style={toolBtnStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1d4ed8'; e.currentTarget.style.color = '#1d4ed8'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent-blue)'; e.currentTarget.style.color = 'var(--accent-blue)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
             >
               {preset.label}
             </button>
           ))}
-          <div style={{ width: 1, background: '#e2e8f0', margin: '0 4px' }} />
+          <div style={{ width: 1, background: 'var(--border)', margin: '0 4px' }} />
           <button
             onClick={() => {
               setSelectedId(null);
               setHiddenIds(new Set());
+              handleStopPlayback();
             }}
             style={toolBtnStyle}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1d4ed8'; e.currentTarget.style.color = '#1d4ed8'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent-blue)'; e.currentTarget.style.color = 'var(--accent-blue)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
           >
             重置
           </button>
@@ -303,9 +416,9 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
             }}
             style={{
               ...toolBtnStyle,
-              background: selectedId ? '#eff6ff' : '#fff',
-              borderColor: selectedId ? '#1d4ed8' : '#e2e8f0',
-              color: selectedId ? '#1d4ed8' : '#475569',
+              background: selectedId ? 'rgba(74,144,226,0.15)' : 'var(--bg-tertiary)',
+              borderColor: selectedId ? 'var(--accent-blue)' : 'var(--border)',
+              color: selectedId ? 'var(--accent-blue)' : 'var(--text-secondary)',
             }}
           >
             仅显示选中
@@ -313,10 +426,82 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
         </div>
       </div>
 
+      {/* 播放控制条 */}
+      {result && totalItems > 0 && (
+        <div style={{
+          height: 36,
+          background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          gap: 8,
+          flexShrink: 0,
+        }}>
+          {/* 播放/暂停按钮 */}
+          <button
+            onClick={handlePlay}
+            style={{
+              ...toolBtnStyle,
+              background: playState === 'playing' ? 'rgba(74,144,226,0.2)' : 'var(--accent-blue)',
+              color: '#fff',
+              borderColor: 'var(--accent-blue)',
+              minWidth: 56,
+              fontWeight: 600,
+            }}
+          >
+            {playState === 'playing' ? '⏸ 暂停' : playState === 'paused' ? '▶ 继续' : '▶ 播放'}
+          </button>
+
+          {/* 停止按钮 */}
+          {playState !== 'idle' && (
+            <button onClick={handleStopPlayback} style={toolBtnStyle}>⏹ 停止</button>
+          )}
+
+          {/* 进度条 */}
+          <div style={{
+            flex: 1, height: 4, background: 'var(--bg-primary)', borderRadius: 2,
+            position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%', borderRadius: 2,
+              background: 'var(--accent-blue)',
+              width: `${playbackIndex < 0 ? 100 : (playbackIndex / totalItems * 100)}%`,
+              transition: 'width 0.15s ease-out',
+            }} />
+          </div>
+
+          {/* 计数 */}
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            {playbackIndex < 0 ? totalItems : playbackIndex} / {totalItems}
+          </span>
+
+          {/* 速度选择 */}
+          <div style={{ display: 'flex', gap: 2 }}>
+            {[1, 2, 5, 10].map((s) => (
+              <button
+                key={s}
+                onClick={() => setSpeed(s)}
+                style={{
+                  padding: '2px 8px', fontSize: 10, borderRadius: 3, cursor: 'pointer',
+                  border: speed === s ? '1px solid var(--accent-blue)' : '1px solid var(--border)',
+                  background: speed === s ? 'rgba(74,144,226,0.15)' : 'var(--bg-tertiary)',
+                  color: speed === s ? 'var(--accent-blue)' : 'var(--text-disabled)',
+                  fontWeight: speed === s ? 600 : 400,
+                }}
+              >
+                {s}x
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Canvas 区域 */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         <div style={{ position: 'absolute', inset: 0 }}>
           <Canvas
+          key={`${container.length}-${container.width}-${container.height}`}
           camera={{
             position: [camDist * 0.7, camDist * 0.6, camDist * 0.7],
             fov: 45,
@@ -342,6 +527,7 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
               onCameraArrived={handleCameraArrived}
               distanceFactor={maxDim * 0.8}
               showLabels={showLabels}
+              playbackIndex={playbackIndex}
             />
           </Suspense>
         </Canvas>
@@ -354,11 +540,11 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
               position: 'absolute',
               top: 12,
               right: 12,
-              background: 'rgba(255,255,255,0.96)',
-              borderRadius: 8,
+              background: 'rgba(37,37,46,0.94)',
+              borderRadius: 6,
               padding: '10px 12px',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-              border: '1px solid #e2e8f0',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              border: '1px solid var(--border)',
               minWidth: 160,
               zIndex: 10,
             }}
@@ -367,8 +553,8 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
               fontSize: 12,
               fontWeight: 600,
               marginBottom: 8,
-              color: '#0f172a',
-              borderBottom: '1px solid #e2e8f0',
+              color: 'var(--text-primary)',
+              borderBottom: '1px solid var(--border)',
               paddingBottom: 6,
             }}>
               商品图例
@@ -395,18 +581,18 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
                     height: 14,
                     borderRadius: 3,
                     background: COLORS[i % COLORS.length],
-                    border: selectedId === id ? '2px solid #0f172a' : '1px solid #cbd5e1',
+                    border: selectedId === id ? '2px solid var(--text-primary)' : '1px solid var(--border)',
                   }}
                 />
-                <span style={{ fontSize: 12, color: '#334155' }}>{id}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{id}</span>
                 <button
                   style={{
                     marginLeft: 'auto',
                     fontSize: 11,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid var(--border)',
                     borderRadius: 4,
-                    background: '#fff',
-                    color: '#64748b',
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-secondary)',
                     cursor: 'pointer',
                     padding: '1px 6px',
                   }}

@@ -14,7 +14,7 @@ export default function ContainerMesh({
   width,
   height,
   opacity = 0.15,
-  color = '#888888',
+  color = '#666666',
 }: ContainerMeshProps) {
   const edgeGeometry = useMemo(() => {
     const geometry = new THREE.BoxGeometry(length, height, width);

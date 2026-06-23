@@ -62,7 +62,7 @@ export default function PlacedItem({
   const fontSize = Math.max(6, Math.min(12, minDim * 0.04));
 
   // 边框颜色：默认深灰，hover 黑色，选中红色，透明时浅灰
-  const edgeColor = selected ? '#ff0000' : isTransparent ? '#cbd5e1' : hovered ? '#000000' : '#1e293b';
+  const edgeColor = selected ? '#ff0000' : isTransparent ? '#3E3E42' : hovered ? '#A0A0A0' : '#555555';
 
   return (
     <group>

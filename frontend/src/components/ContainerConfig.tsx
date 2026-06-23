@@ -13,7 +13,7 @@ interface ContainerConfigProps {
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
-  color: '#64748b',
+  color: 'var(--text-secondary)',
   marginBottom: 4,
 };
 

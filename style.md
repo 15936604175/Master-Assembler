@@ -1,826 +1,255 @@
-import React from 'react';
-import styled from 'styled-components';
-
-const Loader = () => {
-  return (
-    <StyledWrapper>
-      <div className="loader">
-        <div className="box box0">
-          <div />
-        </div>
-        <div className="box box1">
-          <div />
-        </div>
-        <div className="box box2">
-          <div />
-        </div>
-        <div className="box box3">
-          <div />
-        </div>
-        <div className="box box4">
-          <div />
-        </div>
-        <div className="box box5">
-          <div />
-        </div>
-        <div className="box box6">
-          <div />
-        </div>
-        <div className="box box7">
-          <div />
-        </div>
-        <div className="ground">
-          <div />
-        </div>
-      </div>
-    </StyledWrapper>
-  );
-}
-
-const StyledWrapper = styled.div`
-  .loader {
-    --duration: 3s;
-    --primary: rgba(39, 94, 254, 1);
-    --primary-light: #2f71ff;
-    --primary-rgba: rgba(39, 94, 254, 0);
-    width: 200px;
-    height: 320px;
-    position: relative;
-    transform-style: preserve-3d;
-  }
-
-  @media (max-width: 480px) {
-    .loader {
-      zoom: 0.44;
-    }
-  }
-
-  .loader:before, .loader:after {
-    --r: 20.5deg;
-    content: "";
-    width: 320px;
-    height: 140px;
-    position: absolute;
-    right: 32%;
-    bottom: -11px;
-  /* change the back groung color on switching from light to dark mood */
-    background: #e8e8e8;
-    transform: translateZ(200px) rotate(var(--r));
-    -webkit-animation: mask var(--duration) linear forwards infinite;
-    animation: mask var(--duration) linear forwards infinite;
-  }
-
-  .loader:after {
-    --r: -20.5deg;
-    right: auto;
-    left: 32%;
-  }
-
-  .loader .ground {
-    position: absolute;
-    left: -50px;
-    bottom: -120px;
-    transform-style: preserve-3d;
-    transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-  }
-
-  .loader .ground div {
-    transform: rotateX(90deg) rotateY(0deg) translate(-48px, -120px) translateZ(100px) scale(0);
-    width: 200px;
-    height: 200px;
-    background: var(--primary);
-    background: linear-gradient(45deg, var(--primary) 0%, var(--primary) 50%, var(--primary-light) 50%, var(--primary-light) 100%);
-    transform-style: preserve-3d;
-    -webkit-animation: ground var(--duration) linear forwards infinite;
-    animation: ground var(--duration) linear forwards infinite;
-  }
-
-  .loader .ground div:before, .loader .ground div:after {
-    --rx: 90deg;
-    --ry: 0deg;
-    --x: 44px;
-    --y: 162px;
-    --z: -50px;
-    content: "";
-    width: 156px;
-    height: 300px;
-    opacity: 0;
-    background: linear-gradient(var(--primary), var(--primary-rgba));
-    position: absolute;
-    transform: rotateX(var(--rx)) rotateY(var(--ry)) translate(var(--x), var(--y)) translateZ(var(--z));
-    -webkit-animation: ground-shine var(--duration) linear forwards infinite;
-    animation: ground-shine var(--duration) linear forwards infinite;
-  }
-
-  .loader .ground div:after {
-    --rx: 90deg;
-    --ry: 90deg;
-    --x: 0;
-    --y: 177px;
-    --z: 150px;
-  }
-
-  .loader .box {
-    --x: 0;
-    --y: 0;
-    position: absolute;
-    -webkit-animation: var(--duration) linear forwards infinite;
-    animation: var(--duration) linear forwards infinite;
-    transform: translate(var(--x), var(--y));
-  }
-
-  .loader .box div {
-    background-color: var(--primary);
-    width: 48px;
-    height: 48px;
-    position: relative;
-    transform-style: preserve-3d;
-    -webkit-animation: var(--duration) ease forwards infinite;
-    animation: var(--duration) ease forwards infinite;
-    transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-  }
-
-  .loader .box div:before, .loader .box div:after {
-    --rx: 90deg;
-    --ry: 0deg;
-    --z: 24px;
-    --y: -24px;
-    --x: 0;
-    content: "";
-    position: absolute;
-    background-color: inherit;
-    width: inherit;
-    height: inherit;
-    transform: rotateX(var(--rx)) rotateY(var(--ry)) translate(var(--x), var(--y)) translateZ(var(--z));
-    filter: brightness(var(--b, 1.2));
-  }
-
-  .loader .box div:after {
-    --rx: 0deg;
-    --ry: 90deg;
-    --x: 24px;
-    --y: 0;
-    --b: 1.4;
-  }
-
-  .loader .box.box0 {
-    --x: -220px;
-    --y: -120px;
-    left: 58px;
-    top: 108px;
-  }
-
-  .loader .box.box1 {
-    --x: -260px;
-    --y: 120px;
-    left: 25px;
-    top: 120px;
-  }
-
-  .loader .box.box2 {
-    --x: 120px;
-    --y: -190px;
-    left: 58px;
-    top: 64px;
-  }
-
-  .loader .box.box3 {
-    --x: 280px;
-    --y: -40px;
-    left: 91px;
-    top: 120px;
-  }
-
-  .loader .box.box4 {
-    --x: 60px;
-    --y: 200px;
-    left: 58px;
-    top: 132px;
-  }
-
-  .loader .box.box5 {
-    --x: -220px;
-    --y: -120px;
-    left: 25px;
-    top: 76px;
-  }
-
-  .loader .box.box6 {
-    --x: -260px;
-    --y: 120px;
-    left: 91px;
-    top: 76px;
-  }
-
-  .loader .box.box7 {
-    --x: -240px;
-    --y: 200px;
-    left: 58px;
-    top: 87px;
-  }
-
-  .loader .box0 {
-    -webkit-animation-name: box-move0;
-    animation-name: box-move0;
-  }
-
-  .loader .box0 div {
-    -webkit-animation-name: box-scale0;
-    animation-name: box-scale0;
-  }
-
-  .loader .box1 {
-    -webkit-animation-name: box-move1;
-    animation-name: box-move1;
-  }
-
-  .loader .box1 div {
-    -webkit-animation-name: box-scale1;
-    animation-name: box-scale1;
-  }
-
-  .loader .box2 {
-    -webkit-animation-name: box-move2;
-    animation-name: box-move2;
-  }
-
-  .loader .box2 div {
-    -webkit-animation-name: box-scale2;
-    animation-name: box-scale2;
-  }
-
-  .loader .box3 {
-    -webkit-animation-name: box-move3;
-    animation-name: box-move3;
-  }
-
-  .loader .box3 div {
-    -webkit-animation-name: box-scale3;
-    animation-name: box-scale3;
-  }
-
-  .loader .box4 {
-    -webkit-animation-name: box-move4;
-    animation-name: box-move4;
-  }
-
-  .loader .box4 div {
-    -webkit-animation-name: box-scale4;
-    animation-name: box-scale4;
-  }
-
-  .loader .box5 {
-    -webkit-animation-name: box-move5;
-    animation-name: box-move5;
-  }
-
-  .loader .box5 div {
-    -webkit-animation-name: box-scale5;
-    animation-name: box-scale5;
-  }
-
-  .loader .box6 {
-    -webkit-animation-name: box-move6;
-    animation-name: box-move6;
-  }
-
-  .loader .box6 div {
-    -webkit-animation-name: box-scale6;
-    animation-name: box-scale6;
-  }
-
-  .loader .box7 {
-    -webkit-animation-name: box-move7;
-    animation-name: box-move7;
-  }
-
-  .loader .box7 div {
-    -webkit-animation-name: box-scale7;
-    animation-name: box-scale7;
-  }
-
-  @-webkit-keyframes box-move0 {
-    12% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    25%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @keyframes box-move0 {
-    12% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    25%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @-webkit-keyframes box-scale0 {
-    6% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    14%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @keyframes box-scale0 {
-    6% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    14%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @-webkit-keyframes box-move1 {
-    16% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    29%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @keyframes box-move1 {
-    16% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    29%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @-webkit-keyframes box-scale1 {
-    10% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    18%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @keyframes box-scale1 {
-    10% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    18%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @-webkit-keyframes box-move2 {
-    20% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    33%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @keyframes box-move2 {
-    20% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    33%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @-webkit-keyframes box-scale2 {
-    14% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    22%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @keyframes box-scale2 {
-    14% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    22%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @-webkit-keyframes box-move3 {
-    24% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    37%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @keyframes box-move3 {
-    24% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    37%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @-webkit-keyframes box-scale3 {
-    18% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    26%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @keyframes box-scale3 {
-    18% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    26%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @-webkit-keyframes box-move4 {
-    28% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    41%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @keyframes box-move4 {
-    28% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    41%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @-webkit-keyframes box-scale4 {
-    22% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    30%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @keyframes box-scale4 {
-    22% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    30%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @-webkit-keyframes box-move5 {
-    32% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    45%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @keyframes box-move5 {
-    32% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    45%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @-webkit-keyframes box-scale5 {
-    26% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    34%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @keyframes box-scale5 {
-    26% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    34%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @-webkit-keyframes box-move6 {
-    36% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    49%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @keyframes box-move6 {
-    36% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    49%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @-webkit-keyframes box-scale6 {
-    30% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    38%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @keyframes box-scale6 {
-    30% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    38%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @-webkit-keyframes box-move7 {
-    40% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    53%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @keyframes box-move7 {
-    40% {
-      transform: translate(var(--x), var(--y));
-    }
-
-    53%, 52% {
-      transform: translate(0, 0);
-    }
-
-    80% {
-      transform: translate(0, -32px);
-    }
-
-    90%, 100% {
-      transform: translate(0, 188px);
-    }
-  }
-
-  @-webkit-keyframes box-scale7 {
-    34% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    42%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @keyframes box-scale7 {
-    34% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(0);
-    }
-
-    42%, 100% {
-      transform: rotateY(-47deg) rotateX(-15deg) rotateZ(15deg) scale(1);
-    }
-  }
-
-  @-webkit-keyframes ground {
-    0%, 65% {
-      transform: rotateX(90deg) rotateY(0deg) translate(-48px, -120px) translateZ(100px) scale(0);
-    }
-
-    75%, 90% {
-      transform: rotateX(90deg) rotateY(0deg) translate(-48px, -120px) translateZ(100px) scale(1);
-    }
-
-    100% {
-      transform: rotateX(90deg) rotateY(0deg) translate(-48px, -120px) translateZ(100px) scale(0);
-    }
-  }
-
-  @keyframes ground {
-    0%, 65% {
-      transform: rotateX(90deg) rotateY(0deg) translate(-48px, -120px) translateZ(100px) scale(0);
-    }
-
-    75%, 90% {
-      transform: rotateX(90deg) rotateY(0deg) translate(-48px, -120px) translateZ(100px) scale(1);
-    }
-
-    100% {
-      transform: rotateX(90deg) rotateY(0deg) translate(-48px, -120px) translateZ(100px) scale(0);
-    }
-  }
-
-  @-webkit-keyframes ground-shine {
-    0%, 70% {
-      opacity: 0;
-    }
-
-    75%, 87% {
-      opacity: 0.2;
-    }
-
-    100% {
-      opacity: 0;
-    }
-  }
-
-  @keyframes ground-shine {
-    0%, 70% {
-      opacity: 0;
-    }
-
-    75%, 87% {
-      opacity: 0.2;
-    }
-
-    100% {
-      opacity: 0;
-    }
-  }
-
-  @-webkit-keyframes mask {
-    0%, 65% {
-      opacity: 0;
-    }
-
-    66%, 100% {
-      opacity: 1;
-    }
-  }
-
-  @keyframes mask {
-    0%, 65% {
-      opacity: 0;
-    }
-
-    66%, 100% {
-      opacity: 1;
-    }
-  }`;
-
-export default Loader;
+# Master-Assembler UI 设计规范（深色工业风）
+
+## 一、设计语言
+
+参考 PackMaster Pro 专业物流软件界面，采用深色沉浸式工业风设计。
+目标：简洁、高效、信息密度适中、3D 结果展示优先。
+
+---
+
+## 二、色彩系统
+
+### 基础色
+| 变量 | 色值 | 用途 |
+|------|------|------|
+| --bg-primary | #1E1E24 | 主背景 |
+| --bg-secondary | #25252E | 面板/卡片背景 |
+| --bg-tertiary | #2A2A35 | 输入框/表格行背景 |
+| --bg-hover | #32323E | 悬停状态 |
+| --bg-active | #3A3A48 | 激活/选中状态 |
+| --border | #3E3E42 | 边框/分割线 |
+| --border-light | #4A4A52 | 次要边框 |
+
+### 文字色
+| 变量 | 色值 | 用途 |
+|------|------|------|
+| --text-primary | #E0E0E0 | 主文字 |
+| --text-secondary | #A0A0A0 | 次要文字/说明 |
+| --text-disabled | #666666 | 禁用状态 |
+
+### 强调色
+| 变量 | 色值 | 用途 |
+|------|------|------|
+| --accent-blue | #4A90E2 | 主强调/按钮/链接 |
+| --accent-green | #50C878 | 成功/空间利用率 |
+| --accent-purple | #6B5CE7 | 高级功能/Block算法 |
+| --accent-red | #FF6B6B | 错误/警告/未放置 |
+| --accent-orange | #FFB347 | 警告/中等利用率 |
+| --accent-cyan | #4ECDC4 | 信息/辅助 |
+
+### 3D 视口
+| 变量 | 色值 | 用途 |
+|------|------|------|
+| --viewport-bg | #2B2B2B | 3D/2D 视口背景 |
+| --grid-color | #3A3A3A | 网格线 |
+| --grid-section | #4A4A4A | 网格粗线 |
+
+### 商品配色（3D视图 + 图例）
+蓝 #4A90E2, 绿 #50C878, 黄 #FFB347, 紫 #6B5CE7, 红 #FF6B6B, 青 #4ECDC4, 橙 #FF8C42, 粉 #FF6B9D
+
+---
+
+## 三、布局结构
+
+采用 **单页三栏** 布局，顶部工具栏 + 底部状态栏：
+
+```
++----------------------------------------------------+
+|  顶部工具栏 (48px)                                   |
++--------+---------------------------+----------------+
+| 左侧   |    中央视图区              |  右侧          |
+| 输入区 |    3D / 2D 视图            |  结果统计      |
+| 340px  |    (自适应)                |  300px         |
+|        |                           |                |
++--------+---------------------------+----------------+
+|  底部状态栏 (28px)                                    |
++----------------------------------------------------+
+```
+
+### 顶部工具栏 (48px)
+- 左侧：Logo + 应用名「装配大师」
+- 中部：功能按钮组（新建 | 打开 | 保存 | 方案管理）
+- 右侧：计算按钮（主要强调色）| 清空 | 导出报告
+- 背景：#25252E，底部边框 #3E3E42
+
+### 底部状态栏 (28px)
+- 左侧：状态指示（就绪 / 计算中... / 计算完成 ✅）
+- 右侧：算法类型 | 利用率 | 耗时
+- 背景：#1E1E24，顶部边框 #3E3E42
+
+---
+
+## 四、左侧面板（输入区）340px
+
+采用 Tab 页切换三个功能区：
+
+### Tab 1：商品列表
+- DataGrid 表格：SKU | 名称 | 尺寸 | 重量 | 数量
+- 操作栏：+ 新增 | 编辑 | 删除 | Excel导入
+- 选中行高亮：#3A3A48
+- 表格行背景：交替 #25252E / #2A2A35
+
+### Tab 2：集装箱设置
+- 预设箱型下拉：20GP / 40GP / 40HQ / 自定义
+- 内部尺寸：长/宽/高 (mm) - 紧凑排列
+- 最大载重 (kg)
+- 门向选择
+
+### Tab 3：优化算法
+- 高级 Block（推荐标签，绿色边框）
+- Block 块状优化（紫色边框）
+- 高级参数折叠区（Beam Width, Support Ratio 等）
+
+### 底部固定区
+- 「开始计算」按钮：全宽，accent-blue 背景，48px 高
+
+---
+
+## 五、中央视图区
+
+### 视图标签页
+- `3D视图`（默认激活）| `2D视图`
+- 激活标签：底部蓝色指示条
+
+### 3D 视图工具栏
+图标按钮组（白色线条图标）：
+- 透视 | 正视 | 侧视 | 俯视
+- 分割线
+- 重置 | 仅显示选中 | 显示标签
+- 背景透明，悬停 #32323E
+
+### 3D 视口
+- 背景：#2B2B2B
+- 集装箱：半透明线框（#4A90E2 边线）
+- 商品：按 item_id 着色，选中高亮
+- 坐标轴：X红 Y绿 Z蓝（右下角）
+- 尺寸标注：白色文字，虚线
+
+### 2D 视图
+- 俯视图（Top-Down）：X-Z 平面投影
+- 矩形绘制每个放置物品
+- 按 item_id 着色，显示 ID 标签
+- 集装箱边界虚线
+- 支持缩放和平移
+
+### 图例面板（右上角浮层）
+- 背景：rgba(37,37,46,0.95)
+- 商品 ID + 色块 + 隐藏/显示按钮
+- 圆角 6px，边框 #3E3E42
+
+---
+
+## 六、右侧面板（结果统计区）300px
+
+采用卡片堆叠布局，卡片间距 12px。
+
+### 卡片通用样式
+- 背景：#25252E
+- 边框：1px solid #3E3E42
+- 圆角：6px
+- 内边距：14px
+- 标题：12px #A0A0A0，大写间距
+
+### 卡片1：空间利用率
+- 绿色环形进度条（Progress Circle）
+- 中心数值：大号白色
+- 颜色阈值：>=75% 绿 | >=50% 橙 | <50% 红
+
+### 卡片2：重量利用率
+- 蓝色环形进度条
+- 同上格式
+
+### 卡片3：货物统计
+- 三行数据：已装 / 未装 / 总数
+- 数字右对齐，标签左对齐
+
+### 卡片4：重量统计
+- 三行数据：已装重量 / 剩余重量 / 最大载重
+- 单位 kg
+
+### 卡片5：重心偏移
+- X 偏移 (mm)：红色正值 / 蓝色负值
+- Y 偏移 (mm)：同上
+- 综合偏移 (mm)
+- 右侧简化箱体示意图：矩形 + 绿点标注重心位置
+- 颜色阈值：<50mm 绿 | <150mm 橙 | >=150mm 红
+
+### 卡片6：可行性验证
+- 几何 ✓/✗ | 物理 ✓/! | 朝向 ✓/!
+- 稳定性评分 | 支撑率
+- 警告消息列表
+
+### 卡片7：未放置商品（条件显示）
+- 红色边框警告卡片
+- 商品 ID × 数量 : 原因
+
+---
+
+## 七、组件规范
+
+### 按钮
+- 主按钮：bg #4A90E2, 文字白, 圆角 4px
+- 次按钮：bg transparent, border #3E3E42, 文字 #E0E0E0
+- 危险按钮：bg #FF6B6B, 文字白
+- 悬停：亮度 +10%
+- 禁用：opacity 0.5
+
+### 输入框
+- 背景：#2A2A35
+- 边框：#3E3E42
+- 文字：#E0E0E0
+- 聚焦：边框 #4A90E2
+- 圆角：4px
+
+### 表格
+- 表头：bg #2A2A35, 文字 #A0A0A0, 12px
+- 行：交替 #25252E / #2A2A35
+- 选中行：#3A3A48
+- 边框：#3E3E42
+- 等宽数字：font-variant-numeric: tabular-nums
+
+### 标签页 (Tabs)
+- 未激活：文字 #A0A0A0
+- 激活：文字 #E0E0E0 + 底部 2px #4A90E2
+- 背景：transparent
+
+### 进度环
+- 轨道色：#3E3E42
+- 填充色：根据阈值变化
+- 中心数值：24px bold #E0E0E0
+
+---
+
+## 八、字体
+
+```css
+--font-main: 'Segoe UI', 'Microsoft YaHei', 'Roboto', sans-serif;
+--font-mono: 'Consolas', 'Courier New', monospace;
+```
+
+- 标题：14-15px, font-weight 600
+- 正文：13px, font-weight 400
+- 数据：13px, font-variant-numeric: tabular-nums
+- 小号标签：11-12px, color #A0A0A0
+
+---
+
+## 九、间距
+
+| 变量 | 值 | 用途 |
+|------|------|------|
+| --gap-xs | 4px | 紧凑元素 |
+| --gap-sm | 8px | 同类元素间 |
+| --gap-md | 12px | 卡片间距 |
+| --gap-lg | 16px | 区域间距 |
+| --gap-xl | 24px | 面板间距 |
+
+---
+
+## 十、交互
+
+- 过渡动画：0.2s ease
+- 悬停反馈：背景亮度变化或边框高亮
+- 计算中：中央视图显示加载动画覆盖层
+- 计算完成：底部状态栏显示绿色 ✓ + 耗时
+- 错误：红色 toast 通知 + 底部状态栏恢复就绪
