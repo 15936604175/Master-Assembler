@@ -53,8 +53,9 @@ if curl -s http://127.0.0.1:8000/health > /dev/null 2>&1; then
     echo "✓ 后端服务已运行在 http://127.0.0.1:8000"
 else
     echo "启动后端服务..."
-    cd backend
-    python3 -m uvicorn app.main:app --reload --port 8000 &
+    cd backend-rust
+    cargo build --release 2>/dev/null
+    ./target/release/backend 8000 &
     BACKEND_PID=$!
     cd ..
     sleep 3

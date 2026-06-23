@@ -81,6 +81,7 @@ Desktop.ini
 # Tauri / Rust
 src-tauri/target/
 src-tauri/binaries/
+backend-rust/target/
 
 # Logs
 logs/
