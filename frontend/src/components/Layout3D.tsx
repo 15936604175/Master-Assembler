@@ -315,7 +315,8 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
 
       {/* Canvas 区域 */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-        <Canvas
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <Canvas
           camera={{
             position: [camDist * 0.7, camDist * 0.6, camDist * 0.7],
             fov: 45,
@@ -344,6 +345,7 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
             />
           </Suspense>
         </Canvas>
+        </div>
 
         {/* 图例面板 */}
         {result && itemIds.length > 0 && (
