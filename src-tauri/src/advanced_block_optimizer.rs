@@ -13,14 +13,14 @@ use crate::block_optimizer::{
 };
 
 // ── V2 常量 ───────────────────────────────────────────────────
-const ADVANCED_BEAM_WIDTH: usize = 20;
-const ADVANCED_MAX_BEAM_STEPS: usize = 150;
-const CORRIDOR_EXPANSION_RATIO: f64 = 0.20;
-const SEQUENCE_PENALTY_WEIGHT: f64 = 60.0;
-const CORRIDOR_PENALTY_WEIGHT: f64 = 80.0;
-const ORDER_VIOLATION_PENALTY: f64 = 100.0;
-const BATCH_COMPACTNESS_REWARD: f64 = 40.0;
-const FRAGMENTATION_PENALTY: f64 = 50.0;
+const ADVANCED_BEAM_WIDTH: usize = 20;           // Beam Search 宽度，每步保留 Top-K 个候选状态
+const ADVANCED_MAX_BEAM_STEPS: usize = 150;      // Beam Search 最大搜索步数
+const CORRIDOR_EXPANSION_RATIO: f64 = 0.20;      // 批次走廊缓冲扩展比例（相对于批次预期长度）
+const SEQUENCE_PENALTY_WEIGHT: f64 = 60.0;       // 顺序偏离惩罚权重（Block 重心偏离目标中心越远罚分越大）
+const CORRIDOR_PENALTY_WEIGHT: f64 = 80.0;       // 走廊越界惩罚权重（Block 超出走廊范围时按距离惩罚）
+const ORDER_VIOLATION_PENALTY: f64 = 100.0;      // 批次顺序颠倒惩罚（高批次号出现在低批次号之前）
+const BATCH_COMPACTNESS_REWARD: f64 = 40.0;       // 同批次紧凑度奖励权重
+const FRAGMENTATION_PENALTY: f64 = 50.0;          // 空间碎片化惩罚权重
 
 // ── BatchCorridorManager ──────────────────────────────────────
 pub struct BatchCorridorManager {

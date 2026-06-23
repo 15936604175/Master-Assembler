@@ -37,7 +37,10 @@ body {
 .ant-tabs-tab-active .ant-tabs-tab-btn { color: var(--text-primary) !important; }
 .ant-tabs-ink-bar { background: var(--accent-blue) !important; }
 .ant-tabs-nav::before { border-bottom-color: var(--border) !important; }
-.ant-select-selector { background: var(--bg-tertiary) !important; border-color: var(--border) !important; color: var(--text-primary) !important; }
+.ant-select { color: var(--text-primary) !important; }
+.ant-select-selector { background: var(--bg-tertiary) !important; border-color: var(--border) !important; }
+.ant-select-selection-item { color: var(--text-primary) !important; }
+.ant-select-selection-placeholder { color: var(--text-disabled) !important; }
 .ant-select-arrow { color: var(--text-secondary) !important; }
 .ant-select-dropdown { background: var(--bg-secondary) !important; border-color: var(--border) !important; }
 .ant-select-item { color: var(--text-primary) !important; }

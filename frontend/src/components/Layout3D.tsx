@@ -82,12 +82,12 @@ interface AnimatedItemProps {
   itemIndex?: number;
   labelVisible: boolean;
   distanceFactor: number;
-  isNew: boolean; // 是否是刚出现的物品（需要掉落动画）
-  containerHeight: number;
+  isNew: boolean;
+  containerLength: number;
 }
 
-/** 带掉落动画的物品包装器 */
-function AnimatedItem({ isNew, containerHeight, placement, ...rest }: AnimatedItemProps) {
+/** 带飞入动画的物品包装器（从门方向 X+ 飞入） */
+function AnimatedItem({ isNew, containerLength, placement, ...rest }: AnimatedItemProps) {
   const [dropProgress, setDropProgress] = useState(isNew ? 0 : 1);
   const animating = useRef(isNew);
 
@@ -100,23 +100,22 @@ function AnimatedItem({ isNew, containerHeight, placement, ...rest }: AnimatedIt
 
   useFrame((_, delta) => {
     if (animating.current && dropProgress < 1) {
-      const next = Math.min(1, dropProgress + delta * 3); // ~0.33s 掉落
+      const next = Math.min(1, dropProgress + delta * 3);
       setDropProgress(next);
       if (next >= 1) animating.current = false;
     }
   });
 
-  // 掉落效果：从高处落下 + 缩放从小到大
   const eased = dropProgress < 0.5
     ? 2 * dropProgress * dropProgress
     : 1 - Math.pow(-2 * dropProgress + 2, 2) / 2;
-  const yOffset = (1 - eased) * containerHeight * 1.5;
+  // 从门方向（X+）飞入
+  const xOffset = (1 - eased) * containerLength * 0.6;
   const scaleVal = 0.3 + eased * 0.7;
 
-  // 将原始 placement 的 y 偏移，通过修改 position 实现
   const animPlacement: Placement = {
     ...placement,
-    y: placement.y + yOffset,
+    x: placement.x + xOffset,
   };
 
   return (
@@ -167,19 +166,24 @@ function SceneInner({
     return colorMap;
   }, [result]);
 
+  const sortedPlacements = useMemo(() => {
+    if (!result) return [];
+    return [...result.placements].sort((a, b) => a.x - b.x || a.y - b.y || a.z - b.z);
+  }, [result]);
+
   const itemIndices = useMemo(() => {
     if (!result) return new Map<number, number>();
     const indices = new Map<number, number>();
     const counters = new Map<string, number>();
     
-    result.placements.forEach((p, i) => {
+    sortedPlacements.forEach((p, i) => {
       const currentCount = counters.get(p.item_id) || 0;
       counters.set(p.item_id, currentCount + 1);
       indices.set(i, currentCount);
     });
     
     return indices;
-  }, [result]);
+  }, [sortedPlacements]);
 
   const handleClick = useCallback(
     (placement: Placement) => {
@@ -207,8 +211,7 @@ function SceneInner({
         intensity={0.4}
       />
       <ContainerMesh length={container.length} width={container.width} height={container.height} />
-      {result?.placements.map((p, i) => {
-        // 播放模式：只显示前 playbackIndex 个
+      {sortedPlacements.map((p, i) => {
         if (playbackIndex >= 0 && i >= playbackIndex) return null;
         const isNew = playbackIndex >= 0 && i === playbackIndex - 1;
         return (
@@ -224,8 +227,8 @@ function SceneInner({
             itemIndex={itemIndices.get(i)}
             labelVisible={showLabels}
             distanceFactor={distanceFactor}
-            isNew={isNew}
-            containerHeight={container.height}
+              isNew={isNew}
+              containerLength={container.length}
           />
         );
       })}

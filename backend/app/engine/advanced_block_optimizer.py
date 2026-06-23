@@ -48,10 +48,16 @@ from app.engine.block_optimizer import (
 ADVANCED_BEAM_WIDTH = 20         # Beam Search 宽度（V2 更大）
 ADVANCED_MAX_BEAM_STEPS = 150    # Beam Search 最大步数
 CORRIDOR_EXPANSION_RATIO = 0.20  # Corridor 缓冲扩展比例（20%）
+
+# 评分权重常量
+SUPPORT_WEIGHT = 100.0          # 支撑率权重
+VOLUME_WEIGHT = 80.0            # 体积利用率权重
+WALL_CONTACT_WEIGHT = 60.0      # 墙面接触权重
+SAME_SKU_CLUSTER_WEIGHT = 50.0  # 同SKU聚集权重
+BATCH_COMPACTNESS_REWARD = 40.0  # 批次紧凑奖励权重
 SEQUENCE_PENALTY_WEIGHT = 60.0   # 顺序偏离惩罚权重
 CORRIDOR_PENALTY_WEIGHT = 80.0   # 走廊越界惩罚权重
 ORDER_VIOLATION_PENALTY = 100.0  # 批次顺序颠倒惩罚（硬性）
-BATCH_COMPACTNESS_REWARD = 40.0  # 批次紧凑奖励权重
 FRAGMENTATION_PENALTY = 50.0     # 碎片化惩罚权重
 
 
@@ -273,10 +279,10 @@ class AdvancedScoringFunction:
     ) -> float:
         """综合评分。"""
         # 1. 支撑率评分
-        s_support = support_ratio * 100.0
+        s_support = support_ratio * SUPPORT_WEIGHT
 
         # 2. 体积利用评分
-        s_volume = (block.volume / self.container_volume) * 80.0 if self.container_volume > 0 else 0.0
+        s_volume = (block.volume / self.container_volume) * VOLUME_WEIGHT if self.container_volume > 0 else 0.0
 
         # 3. 墙面接触奖励
         wall_contact = 0.0
@@ -286,25 +292,25 @@ class AdvancedScoringFunction:
             wall_contact += 1.0
         if y <= 0.01:
             wall_contact += 1.0
-        s_wall = (wall_contact / 3.0) * 60.0
+        s_wall = (wall_contact / 3.0) * WALL_CONTACT_WEIGHT
 
         # 4. 同 SKU 聚集评分
-        s_cluster = same_sku_ratio * 50.0
+        s_cluster = same_sku_ratio * SAME_SKU_CLUSTER_WEIGHT
 
         # 5. 批次紧凑度奖励
-        s_batch_compact = batch_compactness * 40.0
+        s_batch_compact = batch_compactness * BATCH_COMPACTNESS_REWARD
 
         # 6. 顺序偏离惩罚
-        p_sequence = sequence_penalty * 60.0
+        p_sequence = sequence_penalty * SEQUENCE_PENALTY_WEIGHT
 
         # 7. 走廊越界惩罚
-        p_corridor = corridor_penalty * 80.0
+        p_corridor = corridor_penalty * CORRIDOR_PENALTY_WEIGHT
 
         # 8. 批次顺序颠倒惩罚（硬性）
-        p_order = order_violation * 100.0
+        p_order = order_violation * ORDER_VIOLATION_PENALTY
 
         # 9. 碎片化惩罚
-        p_frag = fragmentation * 50.0
+        p_frag = fragmentation * FRAGMENTATION_PENALTY
 
         total = (s_support + s_volume + s_wall + s_cluster + s_batch_compact
                  - p_sequence - p_corridor - p_order - p_frag)
