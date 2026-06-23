@@ -1,7 +1,7 @@
 import type { OptimizeRequest, OptimizeResponse } from '../types';
 
 const API_BASE = import.meta.env.PROD
-  ? 'http://127.0.0.1:8000'
+  ? 'http://127.0.0.1:8000/api'
   : '/api';
 
 export async function optimizeBlock(request: OptimizeRequest): Promise<OptimizeResponse> {
