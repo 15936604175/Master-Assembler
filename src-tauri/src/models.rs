@@ -211,6 +211,11 @@ pub struct AdvancedBeamState {
     pub batch_min_x: HashMap<i32, f64>,
     pub batch_max_x: HashMap<i32, f64>,
     pub batch_volume: HashMap<i32, f64>,
+    // 物理重心追踪（Block 层面累积加权坐标）
+    pub cg_x: f64,
+    pub cg_y: f64,
+    pub cg_z: f64,
+    pub total_weight: f64,
 }
 
 #[derive(Debug, Clone)]

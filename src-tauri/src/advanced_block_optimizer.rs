@@ -21,6 +21,9 @@ const CORRIDOR_PENALTY_WEIGHT: f64 = 80.0;       // 走廊越界惩罚权重（B
 const ORDER_VIOLATION_PENALTY: f64 = 100.0;      // 批次顺序颠倒惩罚（高批次号出现在低批次号之前）
 const BATCH_COMPACTNESS_REWARD: f64 = 40.0;       // 同批次紧凑度奖励权重
 const FRAGMENTATION_PENALTY: f64 = 50.0;          // 空间碎片化惩罚权重
+const CG_PENALTY_WEIGHT: f64 = 20.0;              // 物理重心偏移惩罚权重（轻量引导，不干扰紧贴放置）
+const CG_CENTER_REWARD_WEIGHT: f64 = 15.0;        // 物理重心靠近中心奖励权重
+const ADVANCED_CG_OFFSET_RATIO: f64 = 0.35;       // 允许的重心偏移比例（容器半长）
 
 // ── BatchCorridorManager ──────────────────────────────────────
 pub struct BatchCorridorManager {
@@ -146,6 +149,7 @@ impl AdvancedScoringFunction {
         support_ratio: f64, same_sku_ratio: f64,
         batch_compactness: f64, sequence_penalty: f64,
         corridor_penalty: f64, order_violation: f64, fragmentation: f64,
+        cg_offset_x: f64, cg_offset_z: f64,
     ) -> f64 {
         let s_support = support_ratio * 100.0;
         let s_volume = if self.container_volume > 0.0 { block.volume / self.container_volume * 80.0 } else { 0.0 };
@@ -160,7 +164,12 @@ impl AdvancedScoringFunction {
         let p_corridor = corridor_penalty * CORRIDOR_PENALTY_WEIGHT;
         let p_order = order_violation * ORDER_VIOLATION_PENALTY;
         let p_frag = fragmentation * FRAGMENTATION_PENALTY;
-        s_support + s_volume + s_wall + s_cluster + s_batch_compact - p_sequence - p_corridor - p_order - p_frag
+        // 物理重心偏移惩罚（水平方向 X/Z）
+        let p_cg = (cg_offset_x.abs() + cg_offset_z.abs()) * CG_PENALTY_WEIGHT;
+        // 物理重心靠近中心奖励（放置后重心越靠近中心，奖励越高）
+        let cg_closeness = (1.0 - cg_offset_x.abs() - cg_offset_z.abs()).max(0.0);
+        let s_cg_center = cg_closeness * CG_CENTER_REWARD_WEIGHT;
+        s_support + s_volume + s_wall + s_cluster + s_batch_compact + s_cg_center - p_sequence - p_corridor - p_order - p_frag - p_cg
     }
 }
 
@@ -196,6 +205,7 @@ impl<'a> AdvancedBeamSearchSolver<'a> {
             inventory: self.initial_inventory.clone(),
             score: 0.0, placed_volume: 0.0, placed_weight: 0.0,
             batch_min_x: HashMap::new(), batch_max_x: HashMap::new(), batch_volume: HashMap::new(),
+            cg_x: 0.0, cg_y: 0.0, cg_z: 0.0, total_weight: 0.0,
         };
         let mut beam = vec![initial_state.clone()];
         let mut best_state = initial_state;
@@ -251,8 +261,22 @@ impl<'a> AdvancedBeamSearchSolver<'a> {
                 let order_violation = self.corridor_manager.evaluate_order_violation(block.batch, block_center_x, &state.placed_blocks);
                 let fragmentation = (state.extreme_points.len() as f64 / MAX_EP_COUNT as f64).min(1.0);
 
+                // 物理重心偏移预测（Block 层面，与 V1 一致）
+                let new_weight = block.count as f64 * block.item_weight;
+                let new_total_weight = state.total_weight + new_weight;
+                let (cg_offset_x, cg_offset_z) = if new_total_weight > 0.0 {
+                    let new_wx = state.cg_x * state.total_weight + (ex + block.length / 2.0) * new_weight;
+                    let new_wz = state.cg_z * state.total_weight + (ez + block.width / 2.0) * new_weight;
+                    let ox = if self.cl > 0.0 { (new_wx / new_total_weight - self.cl / 2.0) / (self.cl / 2.0) } else { 0.0 };
+                    let oz = if self.cw > 0.0 { (new_wz / new_total_weight - self.cw / 2.0) / (self.cw / 2.0) } else { 0.0 };
+                    (ox, oz)
+                } else {
+                    (0.0, 0.0)
+                };
+
                 let score = scoring.score(block, ex, ey, ez, support_ratio, same_sku_ratio,
-                    batch_compactness, sequence_penalty, corridor_penalty, order_violation, fragmentation);
+                    batch_compactness, sequence_penalty, corridor_penalty, order_violation, fragmentation,
+                    cg_offset_x, cg_offset_z);
                 if score > best_score { best_score = score; best_ep = Some(ep); }
             }
             if let Some(ep) = best_ep {
@@ -325,6 +349,18 @@ impl<'a> AdvancedBeamSearchSolver<'a> {
         let new_eps = ep_mgr.prune(new_eps_raw);
         let new_placed_weight = state.placed_weight + block.count as f64 * block.item_weight;
         let new_placed_volume = state.placed_volume + block.volume;
+        let new_total_weight = state.total_weight + block.count as f64 * block.item_weight;
+
+        // 累积加权坐标（Block 层面重心，与 V1 一致）
+        let (new_cg_x, new_cg_y, new_cg_z) = if new_total_weight > 0.0 {
+            (
+                (state.cg_x * state.total_weight + (x + block.length / 2.0) * block.count as f64 * block.item_weight) / new_total_weight,
+                (state.cg_y * state.total_weight + (y + block.height / 2.0) * block.count as f64 * block.item_weight) / new_total_weight,
+                (state.cg_z * state.total_weight + (z + block.width / 2.0) * block.count as f64 * block.item_weight) / new_total_weight,
+            )
+        } else {
+            (0.0, 0.0, 0.0)
+        };
 
         AdvancedBeamState {
             placements: new_placements, placed_blocks: new_placed_blocks,
@@ -332,6 +368,7 @@ impl<'a> AdvancedBeamSearchSolver<'a> {
             score: if self.container_volume > 0.0 { new_placed_volume / self.container_volume } else { 0.0 },
             placed_volume: new_placed_volume, placed_weight: new_placed_weight,
             batch_min_x: new_batch_min_x, batch_max_x: new_batch_max_x, batch_volume: new_batch_volume,
+            cg_x: new_cg_x, cg_y: new_cg_y, cg_z: new_cg_z, total_weight: new_total_weight,
         }
     }
 }
@@ -382,6 +419,11 @@ impl AdvancedBlockOptimizer {
         let mut eps = ep_mgr.generate_initial();
         let mut inventory = initial_inventory.clone();
         let mut placed_weight = 0.0;
+        // 物理重心累积量（Block 层面，与 V1 一致）
+        let mut cg_x = 0.0;
+        let mut cg_y = 0.0;
+        let mut cg_z = 0.0;
+        let mut total_weight = 0.0;
 
         for block in blocks {
             let sku = &block.sku;
@@ -406,8 +448,22 @@ impl AdvancedBlockOptimizer {
                     let order_violation = corridor_manager.evaluate_order_violation(block.batch, block_center_x, &placed_blocks);
                     let fragmentation = (eps.len() as f64 / MAX_EP_COUNT as f64).min(1.0);
 
+                    // 物理重心偏移预测（Block 层面，与 V1 一致）
+                    let new_weight = block.count as f64 * block.item_weight;
+                    let new_total = total_weight + new_weight;
+                    let (cg_offset_x, cg_offset_z) = if new_total > 0.0 {
+                        let new_wx = cg_x * total_weight + (ex + block.length / 2.0) * new_weight;
+                        let new_wz = cg_z * total_weight + (ez + block.width / 2.0) * new_weight;
+                        let ox = if cl > 0.0 { (new_wx / new_total - cl / 2.0) / (cl / 2.0) } else { 0.0 };
+                        let oz = if cw > 0.0 { (new_wz / new_total - cw / 2.0) / (cw / 2.0) } else { 0.0 };
+                        (ox, oz)
+                    } else {
+                        (0.0, 0.0)
+                    };
+
                     let score = scoring.score(block, ex, ey, ez, support_ratio, same_sku_ratio,
-                        batch_compactness, sequence_penalty, corridor_penalty, order_violation, fragmentation);
+                        batch_compactness, sequence_penalty, corridor_penalty, order_violation, fragmentation,
+                        cg_offset_x, cg_offset_z);
                     if score > best_score { best_score = score; best_ep = Some(ep); }
                 }
 
@@ -435,6 +491,15 @@ impl AdvancedBlockOptimizer {
                 });
                 *inventory.entry(sku.clone()).or_insert(0) -= block.count as i32;
                 placed_weight += block.count as f64 * block.item_weight;
+
+                // 更新物理重心（Block 层面累积加权坐标，与 V1 一致）
+                let new_w = block.count as f64 * block.item_weight;
+                if total_weight + new_w > 0.0 {
+                    cg_x = (cg_x * total_weight + (x + block.length / 2.0) * new_w) / (total_weight + new_w);
+                    cg_y = (cg_y * total_weight + (y + block.height / 2.0) * new_w) / (total_weight + new_w);
+                    cg_z = (cg_z * total_weight + (z + block.width / 2.0) * new_w) / (total_weight + new_w);
+                }
+                total_weight += new_w;
 
                 let new_corners = ep_mgr.generate_new_points(x, y, z, block.length, block.height, block.width);
                 let mut seen: HashSet<(i64, i64, i64)> = HashSet::new();

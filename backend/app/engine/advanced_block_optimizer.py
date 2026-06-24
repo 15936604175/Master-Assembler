@@ -13,16 +13,18 @@
     6. Batch Compactness Reward（批次紧凑奖励）: 同 batch 聚集度越高奖励越大。
     7. Beam Search（beam_width=20）: 每步保留 top-20 状态，非贪心选择。
 
-评分函数（8 维度加权）:
+评分函数（10 维度加权）:
     + 100 × supportScore         (支撑率)
     + 80  × utilizationScore     (体积利用率)
     + 60  × wallContactScore     (墙面接触)
     + 50  × sameSkuClusterScore  (同SKU聚集)
     + 40  × batchCompactnessScore(批次紧凑度)
+    + 15  × cgCenterReward       (重心靠近中心奖励)
     - 60  × sequencePenalty      (顺序偏离惩罚)
     - 80  × corridorPenalty      (走廊越界惩罚)
     - 100 × orderViolationPenalty(批次顺序颠倒惩罚)
     - 50  × fragmentationPenalty (碎片化惩罚)
+    - 20  × cgOffsetPenalty      (重心偏移惩罚)
 """
 
 import time
@@ -59,6 +61,9 @@ SEQUENCE_PENALTY_WEIGHT = 60.0   # 顺序偏离惩罚权重
 CORRIDOR_PENALTY_WEIGHT = 80.0   # 走廊越界惩罚权重
 ORDER_VIOLATION_PENALTY = 100.0  # 批次顺序颠倒惩罚（硬性）
 FRAGMENTATION_PENALTY = 50.0     # 碎片化惩罚权重
+CG_PENALTY_WEIGHT = 20.0         # 物理重心偏移惩罚权重（轻量引导，不干扰紧贴放置）
+CG_CENTER_REWARD_WEIGHT = 15.0   # 物理重心靠近中心奖励权重
+ADVANCED_CG_OFFSET_RATIO = 0.35  # 允许的重心偏移比例（容器半长）
 
 
 # ============================================================
@@ -242,10 +247,10 @@ class BatchCorridorManager:
 
 
 # ============================================================
-# 模块 B: AdvancedScoringFunction —— 高级评分函数（8 维度）
+# 模块 B: AdvancedScoringFunction —— 高级评分函数（10 维度）
 # ============================================================
 class AdvancedScoringFunction:
-    """高级综合评分函数：在 V1 基础上增加批次走廊和顺序惩罚。
+    """高级综合评分函数：在 V1 基础上增加批次走廊、顺序惩罚和重心优化。
 
     评分构成（越大越好）:
         + 100 × supportScore          (支撑率)
@@ -253,10 +258,12 @@ class AdvancedScoringFunction:
         + 60  × wallContactScore      (墙面接触)
         + 50  × sameSkuClusterScore   (同SKU聚集)
         + 40  × batchCompactnessScore (批次紧凑度)
+        + 60  × cgCenterReward        (重心靠近中心奖励)
         - 60  × sequencePenalty       (顺序偏离惩罚)
         - 80  × corridorPenalty       (走廊越界惩罚)
         - 100 × orderViolationPenalty (批次顺序颠倒惩罚)
         - 50  × fragmentationPenalty  (碎片化惩罚)
+        - 80  × cgOffsetPenalty       (重心偏移惩罚)
     """
 
     def __init__(self, container: ContainerConfig):
@@ -276,8 +283,10 @@ class AdvancedScoringFunction:
         corridor_penalty: float,
         order_violation: float,
         fragmentation: float,
+        cg_offset_x: float = 0.0,
+        cg_offset_z: float = 0.0,
     ) -> float:
-        """综合评分。"""
+        """综合评分（含物理重心惩罚）。"""
         # 1. 支撑率评分
         s_support = support_ratio * SUPPORT_WEIGHT
 
@@ -312,8 +321,16 @@ class AdvancedScoringFunction:
         # 9. 碎片化惩罚
         p_frag = fragmentation * FRAGMENTATION_PENALTY
 
-        total = (s_support + s_volume + s_wall + s_cluster + s_batch_compact
-                 - p_sequence - p_corridor - p_order - p_frag)
+        # 10. 物理重心偏移惩罚（水平方向 X/Z）
+        p_cg = (abs(cg_offset_x) + abs(cg_offset_z)) * CG_PENALTY_WEIGHT
+
+        # 11. 物理重心靠近中心奖励（放置后重心越靠近中心，奖励越高）
+        # cg_offset 范围 0~1（0=中心，1=边界），靠近中心时给予奖励
+        cg_closeness = max(0.0, 1.0 - abs(cg_offset_x) - abs(cg_offset_z))
+        s_cg_center = cg_closeness * CG_CENTER_REWARD_WEIGHT
+
+        total = (s_support + s_volume + s_wall + s_cluster + s_batch_compact + s_cg_center
+                 - p_sequence - p_corridor - p_order - p_frag - p_cg)
         return total
 
 
@@ -322,7 +339,7 @@ class AdvancedScoringFunction:
 # ============================================================
 @dataclass
 class AdvancedBeamState:
-    """高级 Beam Search 状态：包含批次分布信息。"""
+    """高级 Beam Search 状态：包含批次分布与物理重心信息。"""
     placements: List[Dict] = field(default_factory=list)
     placed_blocks: List[Dict] = field(default_factory=list)
     extreme_points: List[Tuple[float, float, float]] = field(default_factory=list)
@@ -334,6 +351,11 @@ class AdvancedBeamState:
     batch_min_x: Dict[int, float] = field(default_factory=dict)  # 每个 batch 的最小 X
     batch_max_x: Dict[int, float] = field(default_factory=dict)  # 每个 batch 的最大 X
     batch_volume: Dict[int, float] = field(default_factory=dict)  # 每个 batch 已放置体积
+    # 物理重心追踪（Block 层面累积加权坐标）
+    cg_x: float = 0.0   # 当前重心 X（累积）
+    cg_y: float = 0.0
+    cg_z: float = 0.0
+    total_weight: float = 0.0  # 已放置总重量
 
 
 # ============================================================
@@ -487,6 +509,19 @@ class AdvancedBeamSearchSolver:
                 # 碎片化（简化：用 EP 数量估计）
                 fragmentation = min(1.0, len(state.extreme_points) / MAX_EP_COUNT)
 
+                # 物理重心偏移预测（Block 层面，与 V1 一致）
+                new_weight = block.count * block.item_weight
+                new_total_weight = state.total_weight + new_weight
+                if new_total_weight > 0:
+                    new_weighted_x = state.cg_x * state.total_weight + \
+                        (ex + block.length / 2.0) * new_weight
+                    new_weighted_z = state.cg_z * state.total_weight + \
+                        (ez + block.width / 2.0) * new_weight
+                    cg_offset_x = (new_weighted_x / new_total_weight - self.cl / 2.0) / (self.cl / 2.0) if self.cl > 0 else 0.0
+                    cg_offset_z = (new_weighted_z / new_total_weight - self.cw / 2.0) / (self.cw / 2.0) if self.cw > 0 else 0.0
+                else:
+                    cg_offset_x = cg_offset_z = 0.0
+
                 # 综合评分
                 score = self.scoring.score(
                     block, ex, ey, ez,
@@ -497,6 +532,8 @@ class AdvancedBeamSearchSolver:
                     corridor_penalty,
                     order_violation,
                     fragmentation,
+                    cg_offset_x,
+                    cg_offset_z,
                 )
 
                 if score > best_score:
@@ -634,6 +671,18 @@ class AdvancedBeamSearchSolver:
 
         new_placed_weight = state.placed_weight + block.count * block.item_weight
         new_placed_volume = state.placed_volume + block.volume
+        new_total_weight = state.total_weight + block.count * block.item_weight
+
+        # 累积加权坐标（Block 层面重心，与 V1 一致）
+        if new_total_weight > 0:
+            new_cg_x = (state.cg_x * state.total_weight +
+                        (x + block.length / 2.0) * block.count * block.item_weight) / new_total_weight
+            new_cg_y = (state.cg_y * state.total_weight +
+                        (y + block.height / 2.0) * block.count * block.item_weight) / new_total_weight
+            new_cg_z = (state.cg_z * state.total_weight +
+                        (z + block.width / 2.0) * block.count * block.item_weight) / new_total_weight
+        else:
+            new_cg_x = new_cg_y = new_cg_z = 0.0
 
         return AdvancedBeamState(
             placements=new_placements,
@@ -646,6 +695,8 @@ class AdvancedBeamSearchSolver:
             batch_min_x=new_batch_min_x,
             batch_max_x=new_batch_max_x,
             batch_volume=new_batch_volume,
+            cg_x=new_cg_x, cg_y=new_cg_y, cg_z=new_cg_z,
+            total_weight=new_total_weight,
         )
 
 
@@ -740,6 +791,11 @@ class AdvancedBlockOptimizer:
         eps = ep_manager.generate_initial()
         inventory = dict(initial_inventory)
         placed_weight = 0.0
+        # 物理重心累积量（Block 层面，与 V1 一致）
+        cg_x = 0.0
+        cg_y = 0.0
+        cg_z = 0.0
+        total_weight = 0.0
 
         for block in blocks:
             sku = block.sku
@@ -787,11 +843,23 @@ class AdvancedBlockOptimizer:
                     )
                     fragmentation = min(1.0, len(eps) / MAX_EP_COUNT)
 
+                    # 物理重心偏移预测（Block 层面，与 V1 一致）
+                    new_weight = block.count * block.item_weight
+                    new_total = total_weight + new_weight
+                    if new_total > 0:
+                        new_wx = cg_x * total_weight + (ex + block.length / 2.0) * new_weight
+                        new_wz = cg_z * total_weight + (ez + block.width / 2.0) * new_weight
+                        cg_offset_x = (new_wx / new_total - cl / 2.0) / (cl / 2.0) if cl > 0 else 0.0
+                        cg_offset_z = (new_wz / new_total - cw / 2.0) / (cw / 2.0) if cw > 0 else 0.0
+                    else:
+                        cg_offset_x = cg_offset_z = 0.0
+
                     score = scoring.score(
                         block, ex, ey, ez,
                         support_ratio, same_sku_ratio,
                         batch_compactness, sequence_penalty,
                         corridor_penalty, order_violation, fragmentation,
+                        cg_offset_x, cg_offset_z,
                     )
 
                     if score > best_score:
@@ -830,6 +898,14 @@ class AdvancedBlockOptimizer:
 
                 inventory[sku] = inventory.get(sku, 0) - block.count
                 placed_weight += block.count * block.item_weight
+
+                # 更新物理重心（Block 层面累积加权坐标，与 V1 一致）
+                new_w = block.count * block.item_weight
+                if total_weight + new_w > 0:
+                    cg_x = (cg_x * total_weight + (x + block.length / 2.0) * new_w) / (total_weight + new_w)
+                    cg_y = (cg_y * total_weight + (y + block.height / 2.0) * new_w) / (total_weight + new_w)
+                    cg_z = (cg_z * total_weight + (z + block.width / 2.0) * new_w) / (total_weight + new_w)
+                total_weight += new_w
 
                 # 更新 EP
                 new_corners = ep_manager.generate_new_points(x, y, z, block.length, block.height, block.width)

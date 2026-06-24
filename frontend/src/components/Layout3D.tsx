@@ -2,6 +2,7 @@ import { Suspense, useMemo, useState, useRef, useCallback, useEffect } from 'rea
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
+import { Square } from 'lucide-react';
 import PlacedItem, { COLORS } from './PlacedItem';
 import ContainerMesh from './ContainerMesh';
 import { getViewPresets, type ViewPreset } from './SceneControls';
@@ -445,20 +446,72 @@ export default function Layout3D({ result, container, showLabels = false }: Layo
           <button
             onClick={handlePlay}
             style={{
-              ...toolBtnStyle,
-              background: playState === 'playing' ? 'rgba(74,144,226,0.2)' : 'var(--accent-blue)',
-              color: '#fff',
-              borderColor: 'var(--accent-blue)',
-              minWidth: 56,
-              fontWeight: 600,
+              width: 36,
+              height: 40,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              gap: 0,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
             }}
           >
-            {playState === 'playing' ? '⏸ 暂停' : playState === 'paused' ? '▶ 继续' : '▶ 播放'}
+            <div style={{
+              width: '50%',
+              height: 2,
+              background: '#fff',
+              borderRadius: 4,
+              transition: 'all 0.3s',
+              transformOrigin: 'center',
+              transform: playState === 'playing'
+                ? 'translateX(0rem) rotate(90deg)'
+                : 'translateX(0rem) translateY(0.00rem) rotate(90deg)',
+            }} />
+            <div style={{
+              width: '50%',
+              height: 2,
+              background: '#fff',
+              borderRadius: 4,
+              transition: 'all 0.3s',
+              transformOrigin: 'center',
+              transform: playState === 'playing'
+                ? 'translateX(0.65rem) translateY(-0.15rem) rotate(90deg)'
+                : 'translateX(0.45rem) translateY(-0.35rem) rotate(30deg)',
+            }} />
+            <div style={{
+              width: '50%',
+              height: 2,
+              background: '#fff',
+              borderRadius: 4,
+              transition: 'all 0.3s',
+              transformOrigin: 'center',
+              transform: playState === 'playing'
+                ? 'translateX(0.65rem) translateY(-0.20rem) rotate(-90deg)'
+                : 'translateX(0.45rem) translateY(0.10rem) rotate(-30deg)',
+            }} />
           </button>
 
           {/* 停止按钮 */}
           {playState !== 'idle' && (
-            <button onClick={handleStopPlayback} style={toolBtnStyle}>⏹ 停止</button>
+            <button
+              onClick={handleStopPlayback}
+              style={{
+                width: 36,
+                height: 40,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <Square size={18} color="#fff" fill="#fff" />
+            </button>
           )}
 
           {/* 进度条 */}
