@@ -160,11 +160,11 @@ export default function InputPage({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 700, fontSize: 14,
           }}>
-            MA
+            XI
           </div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>装配大师</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>Master Assembler · 集装箱装载优化系统</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>箱智</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>X-Intelligence · 集装箱装载优化系统</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

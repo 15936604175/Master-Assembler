@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo   Master-Assembler - Windows Build
+echo   X-Intelligence - Windows Build
 echo ========================================
 echo.
 
@@ -47,7 +47,7 @@ echo.
 echo ========================================
 echo   Build Complete!
 echo.
-echo   Installer: src-tauri\target\release\bundle\nsis\Master-Assembler_1.0.0_x64-setup.exe
+echo   Installer: src-tauri\target\release\bundle\nsis\X-Intelligence_1.0.0_x64-setup.exe
 echo   Single exe with embedded backend - no separate backend.exe needed!
 echo.
 echo   To publish: create GitHub Release with tag v{version}

@@ -1,4 +1,4 @@
-# 装配大师 (Master Assembler) Implementation Plan
+# 箱智 (X-Intelligence) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) for syntax tracking.
 
@@ -789,7 +789,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.optimize import router as optimize_router
 
-app = FastAPI(title="装配大师 API", version="1.0.0")
+app = FastAPI(title="箱智 API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -824,7 +824,7 @@ Run: `pytest backend/tests/test_api.py -v`
 File: `frontend/package.json`
 ```json
 {
-  "name": "master-assembler-frontend",
+  "name": "x-intelligence-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -922,7 +922,7 @@ File: `frontend/index.html`
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>装配大师</title>
+    <title>箱智</title>
   </head>
   <body>
     <div id="root"></div>
@@ -1267,7 +1267,7 @@ export default function ControlPanel({ onResult, onLoading }: ControlPanelProps)
   };
 
   return (
-    <Card title="装配大师" style={{ minWidth: 320, height: '100%', overflow: 'auto' }}>
+    <Card title="箱智" style={{ minWidth: 320, height: '100%', overflow: 'auto' }}>
       <ContainerConfig value={container} onChange={setContainer} />
       <ItemListEditor value={items} onChange={setItems} />
       <Button

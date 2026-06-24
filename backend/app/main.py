@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.optimize import router as optimize_router
 
-app = FastAPI(title="装配大师 API", version="1.0.0")
+app = FastAPI(title="箱智 API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

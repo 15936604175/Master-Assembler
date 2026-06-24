@@ -135,8 +135,8 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 16 }}>
             <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--accent-blue)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontWeight: 700, fontSize: 12 }}>MA</div>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>装配大师</span>
+              color: '#fff', fontWeight: 700, fontSize: 12 }}>XI</div>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>箱智</span>
           </div>
 
           <div style={{ width: 1, height: 20, background: 'var(--border)' }} />

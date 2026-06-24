@@ -1,4 +1,4 @@
-# Master-Assembler 启动指南
+# X-Intelligence 启动指南
 
 ## 快速启动
 

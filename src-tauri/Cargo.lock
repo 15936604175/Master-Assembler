@@ -1763,20 +1763,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "master-assembler"
-version = "1.0.0"
-dependencies = [
- "axum",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tokio",
- "tower 0.4.13",
- "tower-http 0.5.2",
-]
-
-[[package]]
 name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4458,6 +4444,20 @@ dependencies = [
  "windows-core 0.61.2",
  "windows-version",
  "x11-dl",
+]
+
+[[package]]
+name = "x-intelligence"
+version = "1.0.0"
+dependencies = [
+ "axum",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tokio",
+ "tower 0.4.13",
+ "tower-http 0.5.2",
 ]
 
 [[package]]

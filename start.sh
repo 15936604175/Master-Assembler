@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Master-Assembler 开发启动脚本
+# X-Intelligence 开发启动脚本
 # 启动 Python 后端 + Vite 前端开发服务器
 
 # 存储后台进程 PID
@@ -39,7 +39,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM EXIT
 
 echo "=========================================="
-echo "装配大师 - 开发启动脚本"
+echo "箱智 - 开发启动脚本"
 echo "(按 Ctrl+C 可安全关闭所有服务)"
 echo "=========================================="
 
