@@ -97,3 +97,12 @@ body {
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
 ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #5A5A62; }
+
+.app-root {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.app-root.app-visible {
+  opacity: 1;
+}

@@ -9,6 +9,7 @@ import LeftPanel from './components/LeftPanel';
 import CenterView from './components/CenterView';
 import RightPanel from './components/RightPanel';
 import BoxLoader from './components/BoxLoader';
+import SplashScreen from './components/SplashScreen';
 import { optimizeBlock, optimizeAdvancedBlock } from './services/api';
 import { checkForUpdate } from './utils/updateCheck';
 import type { OptimizeResponse, ContainerConfig, ItemInput } from './types';
@@ -19,6 +20,8 @@ type Algorithm = 'advanced_block' | 'block';
 type AppStatus = 'ready' | 'computing' | 'done' | 'error';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+  const [appVisible, setAppVisible] = useState(false);
   const [result, setResult] = useState<OptimizeResponse | null>(null);
   const [container, setContainer] = useState<ContainerConfig>({
     length: 12032, width: 2352, height: 2695, max_weight: 28000,
@@ -102,6 +105,12 @@ export default function App() {
   const statusText = status === 'computing' ? '计算中...' : status === 'done' ? '计算完成 ✓' : status === 'error' ? '出错' : '就绪';
   const statusColor = status === 'computing' ? 'var(--accent-orange)' : status === 'done' ? 'var(--accent-green)' : status === 'error' ? 'var(--accent-red)' : 'var(--text-secondary)';
 
+  if (showSplash) {
+    return (
+      <SplashScreen onComplete={() => { setShowSplash(false); setAppVisible(true); }} />
+    );
+  }
+
   return (
     <ConfigProvider theme={{
       algorithm: undefined,
@@ -125,7 +134,7 @@ export default function App() {
         Tag: { borderRadiusSM: 3 },
       },
     }}>
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+      <div className={`app-root ${appVisible ? 'app-visible' : ''}`} style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
         {/* 顶部工具栏 */}
         <div style={{
           height: 48, background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)',
