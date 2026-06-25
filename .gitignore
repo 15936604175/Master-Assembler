@@ -78,6 +78,22 @@ frontend/build/
 Thumbs.db
 Desktop.ini
 
+# Windows
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
 # Tauri / Rust
 src-tauri/target/
 src-tauri/binaries/
